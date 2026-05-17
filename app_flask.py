@@ -4,7 +4,7 @@ from __future__ import annotations
 import os, time, threading, argparse
 os.environ.setdefault('OPENCV_LOG_LEVEL', 'SILENT')
 
-from flask import Flask, Response, request, jsonify
+from flask import Flask, Response, request, jsonify, send_file
 import cv2
 from picamera2 import Picamera2
 
@@ -20,6 +20,8 @@ JPEG_QUALITY  = 80
 AWB_WARMUP_S  = 2.0
 FLASK_PORT    = 5050
 LOOP_INTERVAL = 0.05   # ~20 fps
+
+_DASHBOARD = os.path.join(os.path.dirname(__file__), 'monitor', 'dashboard.html')
 
 # ── Globals ──────────────────────────────────────────────────────────────────
 app        = Flask(__name__)
@@ -163,9 +165,12 @@ def index():
   input{background:#333;color:#eee;border:1px solid #555;padding:4px;width:360px}
   button{background:#444;color:#eee;border:none;padding:6px 14px;cursor:pointer;border-radius:4px}
   h2{color:#0df}
+  .monitor-link{display:inline-block;margin:12px 0;padding:8px 18px;background:#00c8b4;color:#000;text-decoration:none;border-radius:6px;font-weight:700;font-family:monospace;}
+  .monitor-link:hover{background:#00b0a0;}
 </style>
 </head><body>
 <h2>&#127909; steam_prop_vision</h2>
+<a class="monitor-link" href="/monitor">&#128202; Ouvrir le Monitor</a>
 <img src="/stream"><br>
 <div class="card">
   <b>FSM:</b> <span id="fsm">-</span> &nbsp;|&nbsp; <b>t:</b> <span id="time">-</span><br>
@@ -204,7 +209,6 @@ function refresh() {
 }
 setInterval(refresh, 1000);
 refresh();
-
 function loadConfig(e) {
   e.preventDefault();
   fetch('/api/config', {
@@ -215,6 +219,11 @@ function loadConfig(e) {
 }
 </script>
 </body></html>"""
+
+@app.route('/monitor')
+def monitor():
+    """Sert le dashboard de monitoring complet."""
+    return send_file(_DASHBOARD, mimetype='text/html')
 
 @app.route('/stream')
 def stream():
@@ -291,4 +300,5 @@ if __name__ == '__main__':
     t.start()
 
     print(f"[flask] Listening on http://0.0.0.0:{args.port}")
+    print(f"[flask] Monitor: http://0.0.0.0:{args.port}/monitor")
     app.run(host='0.0.0.0', port=args.port, threaded=True)

@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Steam Prop Vision — Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --text-xs:   clamp(0.6875rem, 0.65rem + 0.2vw, 0.75rem);
+  --text-sm:   clamp(0.75rem,   0.7rem  + 0.3vw, 0.875rem);
+  --text-base: clamp(0.875rem,  0.82rem + 0.25vw, 1rem);
+  --text-lg:   clamp(1rem,      0.9rem  + 0.5vw,  1.25rem);
+  --text-xl:   clamp(1.25rem,   1rem    + 1vw,    1.75rem);
+  --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem;
+  --space-4: 1rem;    --space-5: 1.25rem; --space-6: 1.5rem;
+  --radius-sm: 0.25rem; --radius-md: 0.375rem; --radius-lg: 0.5rem;
+  --radius-full: 9999px;
+  --color-bg:              #0d0d0b;
+  --color-surface:         #141412;
+  --color-surface-2:       #1a1916;
+  --color-surface-offset:  #1f1e1b;
+  --color-surface-dynamic: #272521;
+  --color-border:          rgba(255,255,255,0.07);
+  --color-divider:         rgba(255,255,255,0.05);
+  --color-text:       #e2e0db;
+  --color-text-muted: #8a8880;
+  --color-text-faint: #4a4846;
+  --color-primary:          #00c8b4;
+  --color-primary-dim:      rgba(0, 200, 180, 0.12);
+  --color-primary-border:   rgba(0, 200, 180, 0.25);
+  --color-success:  #4caf82;
+  --color-warning:  #e09c3a;
+  --color-error:    #e05a5a;
+  --color-blue:     #5b8fe8;
+  --color-success-bg: rgba(76, 175, 130, 0.1);
+  --color-warning-bg: rgba(224, 156, 58, 0.1);
+  --color-error-bg:   rgba(224, 90, 90, 0.1);
+  --color-blue-bg:    rgba(91, 143, 232, 0.1);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.5);
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --transition: 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-font-smoothing: antialiased; }
+body {
+  min-height: 100dvh;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  background: var(--color-bg);
+  overflow-x: hidden;
+}
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: none; }
+.app { display: grid; grid-template-rows: 48px 1fr; min-height: 100dvh; }
+.header {
+  position: sticky; top: 0; z-index: 100;
+  display: flex; align-items: center; gap: var(--space-4);
+  padding: 0 var(--space-6);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+}
+.logo {
+  display: flex; align-items: center; gap: var(--space-2);
+  font-family: var(--font-mono); font-weight: 600; font-size: var(--text-base);
+  color: var(--color-primary); letter-spacing: -0.02em;
+}
+.header-meta { margin-left: auto; display: flex; align-items: center; gap: var(--space-4); }
+.header-fps { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-muted); }
+.conn-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--color-error); transition: background var(--transition); flex-shrink: 0;
+}
+.conn-dot.connected { background: var(--color-success); }
+.conn-label { font-size: var(--text-xs); color: var(--color-text-muted); font-family: var(--font-mono); }
+.ws-status { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-faint); }
+.btn-sm {
+  background: var(--color-surface-offset);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs); font-weight: 500;
+  color: var(--color-text-muted);
+  transition: all var(--transition);
+}
+.btn-sm:hover { background: var(--color-surface-dynamic); color: var(--color-text); }
+.btn-primary { background: var(--color-primary); border-color: var(--color-primary); color: #000; font-weight: 600; }
+.btn-primary:hover { background: #00b0a0; border-color: #00b0a0; color: #000; }
+.main {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-6);
+  align-items: start;
+}
+@media (max-width: 1024px) { .main { grid-template-columns: 1fr; } }
+.panel { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; }
+.panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-divider);
+  background: var(--color-surface-offset);
+}
+.panel-title { font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-text-muted); }
+.panel-body { padding: var(--space-4); }
+.stream-wrapper { position: relative; background: #000; border-radius: calc(var(--radius-lg) - 1px); overflow: hidden; aspect-ratio: 16/9; width: 100%; }
+.stream-img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.stream-overlay {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: var(--space-2);
+  background: rgba(0,0,0,0.7);
+  font-family: var(--font-mono); font-size: var(--text-sm); color: var(--color-text-muted);
+}
+.stream-overlay.hidden { display: none; }
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3); margin-bottom: var(--space-4); }
+@media (max-width: 768px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+.kpi {
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg); padding: var(--space-3) var(--space-4);
+  display: flex; flex-direction: column; gap: var(--space-1);
+}
+.kpi-label { font-size: var(--text-xs); color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500; }
+.kpi-value { font-family: var(--font-mono); font-size: var(--text-lg); font-weight: 600; color: var(--color-text); font-variant-numeric: tabular-nums; transition: color var(--transition); }
+.kpi-sub { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-faint); }
+.fsm-badge { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-3); border-radius: var(--radius-full); font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.04em; transition: all var(--transition); }
+.fsm-IDLE    { background: var(--color-surface-offset); color: var(--color-text-muted); border: 1px solid var(--color-border); }
+.fsm-ACTIVE  { background: var(--color-blue-bg); color: var(--color-blue); border: 1px solid rgba(91,143,232,0.25); }
+.fsm-WAITING { background: var(--color-warning-bg); color: var(--color-warning); border: 1px solid rgba(224,156,58,0.25); }
+.fsm-DONE    { background: var(--color-success-bg); color: var(--color-success); border: 1px solid rgba(76,175,130,0.25); }
+.fsm-ERROR   { background: var(--color-error-bg); color: var(--color-error); border: 1px solid rgba(224,90,90,0.25); }
+.fsm-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.fsm-ACTIVE .fsm-dot, .fsm-WAITING .fsm-dot { animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+.score-bar-wrap { display: grid; align-items: center; grid-template-columns: 100px 1fr 44px; gap: var(--space-3); margin-bottom: var(--space-2); }
+.score-label { font-size: var(--text-xs); font-weight: 500; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.score-track { height: 6px; background: var(--color-surface-offset); border-radius: var(--radius-full); overflow: hidden; }
+.score-fill { height: 100%; border-radius: var(--radius-full); background: var(--color-primary); transition: width 0.4s cubic-bezier(0.16,1,0.3,1); width: 0%; }
+.score-fill.low { background: var(--color-error); }
+.score-fill.mid { background: var(--color-warning); }
+.score-fill.high { background: var(--color-success); }
+.score-num { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-muted); text-align: right; font-variant-numeric: tabular-nums; }
+.log-list { display: flex; flex-direction: column; gap: 2px; max-height: 200px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--color-surface-dynamic) transparent; }
+.log-entry { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-muted); padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm); background: var(--color-surface-offset); border-left: 2px solid var(--color-primary-border); line-height: 1.5; animation: slideIn 0.2s ease-out; }
+@keyframes slideIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
+.log-empty { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-faint); padding: var(--space-3); text-align: center; }
+.log-ts { color: var(--color-text-faint); margin-right: var(--space-2); user-select: none; }
+.sparkline-wrap { margin-top: var(--space-4); }
+.sparkline-title { font-size: var(--text-xs); color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500; margin-bottom: var(--space-2); }
+canvas#spark { width:100%; height:60px; display:block; }
+.sidebar { display: flex; flex-direction: column; gap: var(--space-4); }
+.status-row { display: flex; align-items: center; justify-content: space-between; padding: var(--space-2) 0; border-bottom: 1px solid var(--color-divider); }
+.status-row:last-child { border-bottom: none; }
+.status-key { font-size: var(--text-xs); color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; }
+.status-val { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text); font-variant-numeric: tabular-nums; text-align: right; word-break: break-all; max-width: 200px; }
+.config-form { display: flex; flex-direction: column; gap: var(--space-3); }
+.field-label { font-size: var(--text-xs); color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; display: block; margin-bottom: var(--space-1); }
+.config-input { width: 100%; background: var(--color-surface-offset); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-2) var(--space-3); font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text); transition: border-color var(--transition); }
+.config-input:focus { outline: none; border-color: var(--color-primary-border); background: var(--color-surface-2); }
+.config-result { font-family: var(--font-mono); font-size: var(--text-xs); padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--color-surface-offset); color: var(--color-text-muted); border: 1px solid var(--color-border); display: none; word-break: break-all; line-height: 1.6; }
+.config-result.visible { display: block; }
+.config-result.ok  { color: var(--color-success); border-color: rgba(76,175,130,0.2); background: var(--color-success-bg); }
+.config-result.err { color: var(--color-error);   border-color: rgba(224,90,90,0.2);  background: var(--color-error-bg); }
+.inject-range-row { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-2); }
+.inject-range-label { font-size: var(--text-xs); color: var(--color-text-muted); white-space: nowrap; }
+.inject-conf-val { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-primary); min-width: 28px; }
+.inject-result { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-primary); margin-top: var(--space-2); display: none; opacity: 0; transition: opacity var(--transition); }
+.presence-indicator { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--color-surface-offset); border: 1px solid var(--color-border); transition: all var(--transition); }
+.presence-indicator.active { background: rgba(0,200,180,0.06); border-color: var(--color-primary-border); }
+.presence-light { width: 12px; height: 12px; border-radius: 50%; background: var(--color-error); transition: all var(--transition); flex-shrink: 0; }
+.presence-indicator.active .presence-light { background: var(--color-primary); box-shadow: 0 0 8px rgba(0,200,180,0.5); animation: glow 1.5s ease-in-out infinite; }
+@keyframes glow { 0%,100% { box-shadow: 0 0 4px rgba(0,200,180,0.4); } 50% { box-shadow: 0 0 12px rgba(0,200,180,0.8); } }
+.presence-text { font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 600; }
+.presence-score-badge { margin-left: auto; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-muted); background: var(--color-surface-dynamic); padding: 2px 8px; border-radius: var(--radius-full); }
+.plaque-card { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--color-surface-offset); border: 1px solid var(--color-border); transition: all var(--transition); }
+.plaque-card.detected { background: var(--color-blue-bg); border-color: rgba(91,143,232,0.25); }
+.plaque-icon { font-family: var(--font-mono); font-size: var(--text-base); font-weight: 700; color: var(--color-text-faint); flex-shrink: 0; }
+.plaque-card.detected .plaque-icon { color: var(--color-blue); }
+.plaque-name { font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 600; color: var(--color-text-muted); }
+.plaque-card.detected .plaque-name { color: var(--color-text); }
+.plaque-score-badge { margin-left: auto; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-faint); background: var(--color-surface-dynamic); padding: 2px 8px; border-radius: var(--radius-full); transition: all var(--transition); }
+.plaque-card.detected .plaque-score-badge { color: var(--color-blue); background: rgba(91,143,232,0.15); }
+.uptime-display { font-family: var(--font-mono); font-size: var(--text-xl); font-weight: 600; color: var(--color-primary); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.toast { position: fixed; bottom: var(--space-6); right: var(--space-6); background: var(--color-surface-2); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-3) var(--space-5); font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-muted); box-shadow: var(--shadow-md); transform: translateY(80px); opacity: 0; transition: all 0.3s cubic-bezier(0.16,1,0.3,1); z-index: 200; pointer-events: none; }
+.toast.show { transform: translateY(0); opacity: 1; }
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-surface-dynamic); border-radius: 2px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border-width: 0; }
+</style>
+</head>
+<body>
+<div class="app">
+<header class="header">
+  <div class="logo">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="2" y="6" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/>
+      <circle cx="12" cy="13" r="4" stroke="currentColor" stroke-width="1.5"/>
+      <circle cx="12" cy="13" r="1.5" fill="currentColor"/>
+      <path d="M8 6V4.5C8 3.67 8.67 3 9.5 3h5c.83 0 1.5.67 1.5 1.5V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    steam_prop_vision
+  </div>
+  <div class="header-meta">
+    <span class="ws-status" id="ws-status">WS: —</span>
+    <span class="header-fps" id="fps-display">— Hz</span>
+    <div class="conn-dot" id="conn-dot"></div>
+    <span class="conn-label" id="conn-label">disconnected</span>
+  </div>
+</header>
+<main class="main">
+  <div style="display:flex;flex-direction:column;gap:var(--space-4);">
+    <div class="kpi-grid">
+      <div class="kpi"><span class="kpi-label">FSM State</span><span class="kpi-value" id="kpi-fsm">—</span><span class="kpi-sub" id="kpi-fsm-sub">En attente</span></div>
+      <div class="kpi"><span class="kpi-label">Timer</span><span class="kpi-value" id="kpi-timer">—</span><span class="kpi-sub">secondes</span></div>
+      <div class="kpi"><span class="kpi-label">Présence</span><span class="kpi-value" id="kpi-presence">—</span><span class="kpi-sub" id="kpi-pscore">score —</span></div>
+      <div class="kpi"><span class="kpi-label">Plaque</span><span class="kpi-value" id="kpi-plaque">—</span><span class="kpi-sub" id="kpi-pscore2">score —</span></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Live Stream — MJPEG</span>
+        <span class="fsm-badge fsm-IDLE" id="stream-status-badge"><span class="fsm-dot"></span> IDLE</span>
+      </div>
+      <div style="background:#000;">
+        <div class="stream-wrapper">
+          <img id="stream-img" class="stream-img" src="/stream" alt="Flux caméra">
+          <div class="stream-overlay hidden" id="stream-overlay">Chargement…</div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Scores de détection</span></div>
+      <div class="panel-body">
+        <div class="score-bar-wrap"><span class="score-label">Présence</span><div class="score-track"><div class="score-fill" id="bar-presence"></div></div><span class="score-num" id="num-presence">0.000</span></div>
+        <div class="score-bar-wrap"><span class="score-label">Plaque</span><div class="score-track"><div class="score-fill" id="bar-plaque"></div></div><span class="score-num" id="num-plaque">0.000</span></div>
+        <div class="sparkline-wrap"><div class="sparkline-title">Historique présence (60s)</div><canvas id="spark" height="60"></canvas></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Action Log</span><button class="btn-sm" onclick="clearLog()">Effacer</button></div>
+      <div class="panel-body" style="padding:var(--space-3);">
+        <div class="log-list" id="log-list" role="log"><div class="log-empty" id="log-empty">Aucune action détectée</div></div>
+      </div>
+    </div>
+  </div>
+  <aside class="sidebar">
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Présence</span></div>
+      <div class="panel-body" style="padding:var(--space-3);">
+        <div class="presence-indicator" id="presence-indicator">
+          <div class="presence-light"></div>
+          <span class="presence-text" id="presence-text">ABSENT</span>
+          <span class="presence-score-badge" id="presence-score-badge">0.000</span>
+        </div>
+        <div style="margin-top:var(--space-3);">
+          <div class="plaque-card" id="plaque-card">
+            <span class="plaque-icon">#</span>
+            <span class="plaque-name" id="plaque-name">Aucune plaque</span>
+            <span class="plaque-score-badge" id="plaque-score-badge">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Status JSON</span></div>
+      <div class="panel-body" style="padding:0;"><div id="status-rows" style="padding:0 var(--space-4);"></div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Uptime Session</span></div>
+      <div class="panel-body">
+        <div class="uptime-display" id="uptime">00:00:00</div>
+        <div style="font-size:var(--text-xs);color:var(--color-text-faint);margin-top:var(--space-1);font-family:var(--font-mono)">depuis la connexion</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Charger Config</span></div>
+      <div class="panel-body">
+        <form class="config-form" onsubmit="loadConfig(event)">
+          <div><label class="field-label" for="config-folder">Dossier</label><input id="config-folder" class="config-input" type="text" placeholder="/home/steam/configs/enigme1"></div>
+          <button type="submit" class="btn-sm btn-primary" style="align-self:flex-start;">Charger</button>
+          <div class="config-result" id="config-result"></div>
+        </form>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">Inject Détection</span></div>
+      <div class="panel-body">
+        <form onsubmit="injectDetection(event)">
+          <label class="field-label" for="inject-label">Label</label>
+          <input id="inject-label" class="config-input" type="text" placeholder="PLAQUE:A1 / presence">
+          <div class="inject-range-row">
+            <label class="inject-range-label" for="inject-conf">Confiance</label>
+            <input id="inject-conf" type="range" min="0" max="1" step="0.01" value="0.9" style="flex:1;accent-color:var(--color-primary);" oninput="document.getElementById('inject-conf-val').textContent=parseFloat(this.value).toFixed(2)">
+            <span class="inject-conf-val" id="inject-conf-val">0.90</span>
+          </div>
+          <button type="submit" class="btn-sm" style="margin-top:var(--space-3);">Injecter →</button>
+          <div class="inject-result" id="inject-result"></div>
+        </form>
+      </div>
+    </div>
+  </aside>
+</main>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+// ── Auto-detect host (served by Flask on same origin)
+const FLASK_ORIGIN = window.location.origin; // e.g. http://192.168.1.135:5050
+const WS_HOST = FLASK_ORIGIN.replace(/^http/, 'ws').replace(/:5050$/, ':8889');
+
+let ws = null;
+let connected = false;
+let sessionStart = null;
+let uptimeInterval = null;
+let prevStatus = {};
+let presenceHistory = [];
+let logLines = [];
+let fpsCount = 0; let fpsLast = Date.now();
+
+// ── WebSocket ──────────────────────────────────────────────────────────────
+function connectWS() {
+  if (ws) { try { ws.close(); } catch(e) {} }
+  ws = new WebSocket(WS_HOST);
+  document.getElementById('ws-status').textContent = 'WS: connecting…';
+  ws.onopen = () => {
+    setConnected(true);
+    document.getElementById('ws-status').textContent = 'WS: ✓ ' + WS_HOST;
+    showToast('WebSocket connecté');
+  };
+  ws.onclose = () => {
+    setConnected(false);
+    document.getElementById('ws-status').textContent = 'WS: ✗ reconnect…';
+    setTimeout(connectWS, 3000);
+  };
+  ws.onerror = () => {
+    document.getElementById('ws-status').textContent = 'WS: erreur';
+  };
+  ws.onmessage = (e) => {
+    fpsCount++;
+    try {
+      const data = JSON.parse(e.data);
+      handleWsEvent(data);
+    } catch(err) {}
+  };
+}
+
+function handleWsEvent(data) {
+  if (data.type === 'heartbeat') {
+    setConnected(true);
+    return;
+  }
+  if (data.type === 'status' || data.fsm !== undefined) {
+    updateUI(data);
+    return;
+  }
+  // Generic event → log it
+  if (data.type && data.type !== 'heartbeat') {
+    const msg = data.msg || JSON.stringify(data);
+    addLogLine('[' + data.type + '] ' + msg);
+  }
+}
+
+// Also poll /api/status every 1s as fallback
+setInterval(async () => {
+  try {
+    const r = await fetch('/api/status', { signal: AbortSignal.timeout(2000) });
+    if (r.ok) {
+      const s = await r.json();
+      updateUI(s);
+      if (!connected) setConnected(true);
+    }
+  } catch(e) {}
+}, 1000);
+
+// ── FPS
+setInterval(() => {
+  const elapsed = (Date.now() - fpsLast) / 1000;
+  document.getElementById('fps-display').textContent = (fpsCount / elapsed).toFixed(1) + ' Hz';
+  fpsCount = 0; fpsLast = Date.now();
+}, 2000);
+
+// ── Connection state
+function setConnected(val) {
+  if (connected === val) return;
+  connected = val;
+  const dot = document.getElementById('conn-dot');
+  const label = document.getElementById('conn-label');
+  dot.classList.toggle('connected', val);
+  label.textContent = val ? 'connected' : 'disconnected';
+  if (val && !sessionStart) { sessionStart = Date.now(); startUptime(); }
+}
+
+function startUptime() {
+  if (uptimeInterval) clearInterval(uptimeInterval);
+  uptimeInterval = setInterval(() => {
+    if (!sessionStart) return;
+    const s = Math.floor((Date.now() - sessionStart) / 1000);
+    const h = String(Math.floor(s/3600)).padStart(2,'0');
+    const m = String(Math.floor((s%3600)/60)).padStart(2,'0');
+    const sec = String(s%60).padStart(2,'0');
+    document.getElementById('uptime').textContent = h+':'+m+':'+sec;
+  }, 1000);
+}
+
+// ── Update UI
+function updateUI(s) {
+  animateText('kpi-fsm', s.fsm || '—');
+  animateText('kpi-timer', s.t != null ? s.t + 's' : '—');
+  animateText('kpi-presence', s.presence ? 'PRÉSENT' : 'ABSENT');
+  setText('kpi-pscore', 'score ' + (s.presence_score ?? '—'));
+  animateText('kpi-plaque', s.plaque || 'none');
+  setText('kpi-pscore2', 'score ' + (s.plaque_score ?? '—'));
+  updateFsmBadge(s.fsm || 'IDLE');
+  const pi = document.getElementById('presence-indicator');
+  const pt = document.getElementById('presence-text');
+  const psb = document.getElementById('presence-score-badge');
+  pi.classList.toggle('active', !!s.presence);
+  pt.textContent = s.presence ? 'PRÉSENT' : 'ABSENT';
+  psb.textContent = s.presence_score != null ? s.presence_score.toFixed(3) : '—';
+  const pc = document.getElementById('plaque-card');
+  const pn = document.getElementById('plaque-name');
+  const psb2 = document.getElementById('plaque-score-badge');
+  pc.classList.toggle('detected', !!s.plaque);
+  pn.textContent = s.plaque || 'Aucune plaque';
+  psb2.textContent = s.plaque_score != null ? s.plaque_score.toFixed(3) : '—';
+  updateBar('bar-presence', 'num-presence', s.presence_score ?? 0);
+  updateBar('bar-plaque', 'num-plaque', s.plaque_score ?? 0);
+  presenceHistory.push({ t: Date.now(), score: s.presence_score ?? 0 });
+  const cutoff = Date.now() - 60000;
+  presenceHistory = presenceHistory.filter(p => p.t > cutoff).slice(-120);
+  drawSparkline();
+  updateStatusRows(s);
+  if (s.action_log && JSON.stringify(s.action_log) !== JSON.stringify(prevStatus.action_log)) {
+    const newLines = (s.action_log || []).filter(l => !(prevStatus.action_log || []).includes(l));
+    newLines.forEach(l => addLogLine(l));
+  }
+  prevStatus = { ...s };
+}
+
+function animateText(id, val) {
+  const el = document.getElementById(id);
+  if (!el || el.textContent === val) return;
+  el.style.color = 'var(--color-primary)';
+  el.textContent = val;
+  setTimeout(() => { el.style.color = ''; }, 300);
+}
+function setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
+function updateFsmBadge(state) {
+  const b = document.getElementById('stream-status-badge');
+  if (!b) return;
+  b.className = 'fsm-badge fsm-' + (state || 'IDLE');
+  b.innerHTML = '<span class="fsm-dot"></span> ' + (state || 'IDLE');
+}
+function updateBar(barId, numId, val) {
+  const fill = document.getElementById(barId);
+  const num  = document.getElementById(numId);
+  if (!fill || !num) return;
+  const pct = Math.max(0, Math.min(1, val)) * 100;
+  fill.style.width = pct + '%';
+  fill.className = 'score-fill ' + (pct < 30 ? 'low' : pct < 70 ? 'mid' : 'high');
+  num.textContent = val.toFixed(3);
+}
+function updateStatusRows(s) {
+  const c = document.getElementById('status-rows');
+  if (!c) return;
+  const keys = ['fsm','t','presence','presence_score','plaque','plaque_score','config_folder'];
+  c.innerHTML = keys.map(k => {
+    const v = s[k];
+    const d = v === null || v === undefined ? '—' : typeof v === 'boolean' ? (v?'true':'false') : String(v);
+    return `<div class="status-row"><span class="status-key">${k}</span><span class="status-val">${d}</span></div>`;
+  }).join('');
+}
+function addLogLine(line) {
+  const list = document.getElementById('log-list');
+  const empty = document.getElementById('log-empty');
+  if (empty) empty.remove();
+  const now = new Date().toLocaleTimeString('fr-FR', { hour12: false });
+  const div = document.createElement('div');
+  div.className = 'log-entry';
+  div.innerHTML = `<span class="log-ts">${now}</span>${line.replace(/</g,'&lt;').replace(/>/g,'&gt;')}`;
+  list.insertBefore(div, list.firstChild);
+  while (list.children.length > 80) list.removeChild(list.lastChild);
+}
+function clearLog() {
+  document.getElementById('log-list').innerHTML = '<div class="log-empty" id="log-empty">Aucune action détectée</div>';
+}
+function drawSparkline() {
+  const canvas = document.getElementById('spark');
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.parentElement.clientWidth;
+  const h = 60;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  const data = presenceHistory;
+  if (data.length < 2) return;
+  ctx.clearRect(0, 0, w, h);
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx.lineWidth = 1;
+  [0.25,0.5,0.75].forEach(y => { ctx.beginPath(); ctx.moveTo(0,h*(1-y)); ctx.lineTo(w,h*(1-y)); ctx.stroke(); });
+  const grad = ctx.createLinearGradient(0,0,0,h);
+  grad.addColorStop(0,'rgba(0,200,180,0.3)');
+  grad.addColorStop(1,'rgba(0,200,180,0.02)');
+  const minT = data[0].t, maxT = data[data.length-1].t;
+  const rangeT = maxT-minT || 1;
+  const xOf = t => ((t-minT)/rangeT)*w;
+  const yOf = v => h - v*(h-4) - 2;
+  ctx.beginPath();
+  ctx.moveTo(xOf(data[0].t), yOf(data[0].score));
+  data.forEach(p => ctx.lineTo(xOf(p.t), yOf(p.score)));
+  ctx.lineTo(xOf(data[data.length-1].t), h);
+  ctx.lineTo(xOf(data[0].t), h);
+  ctx.closePath();
+  ctx.fillStyle = grad; ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(xOf(data[0].t), yOf(data[0].score));
+  data.forEach(p => ctx.lineTo(xOf(p.t), yOf(p.score)));
+  ctx.strokeStyle = '#00c8b4'; ctx.lineWidth = 1.5; ctx.lineJoin = 'round'; ctx.stroke();
+  const last = data[data.length-1];
+  ctx.beginPath(); ctx.arc(xOf(last.t), yOf(last.score), 3, 0, Math.PI*2);
+  ctx.fillStyle = '#00c8b4'; ctx.fill();
+}
+async function loadConfig(e) {
+  e.preventDefault();
+  const folder = document.getElementById('config-folder').value.trim();
+  const result = document.getElementById('config-result');
+  if (!folder) { showConfigResult('Dossier requis', false); return; }
+  result.className = 'config-result visible'; result.textContent = 'Chargement…';
+  try {
+    const r = await fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({folder}), signal:AbortSignal.timeout(5000) });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    showConfigResult('✓ Plaques: '+(d.plaques?.join(', ')||'—')+'\n✓ Rules: '+(d.rules||'—')+'\n✓ Detectors: '+(d.detectors?.join(', ')||'—'), true);
+    showToast('Config chargée');
+  } catch(err) { showConfigResult('Erreur: '+err.message, false); }
+}
+function showConfigResult(msg, ok) {
+  const r = document.getElementById('config-result');
+  r.className = 'config-result visible '+(ok?'ok':'err');
+  r.style.whiteSpace = 'pre-line'; r.textContent = msg;
+}
+async function injectDetection(e) {
+  e.preventDefault();
+  const label = document.getElementById('inject-label').value.trim();
+  const conf  = parseFloat(document.getElementById('inject-conf').value);
+  const res   = document.getElementById('inject-result');
+  if (!label) return;
+  try {
+    const r = await fetch('/api/inject', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({label,conf}), signal:AbortSignal.timeout(3000) });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    res.style.display='block'; res.textContent='→ Injecté: '+label+' @ '+conf.toFixed(2); res.style.opacity='1';
+    addLogLine('[inject] '+label+' @ '+conf.toFixed(2));
+    showToast('Détection injectée');
+    setTimeout(() => { res.style.opacity='0'; setTimeout(()=>{res.style.display='none';},300); }, 2500);
+  } catch(err) { res.style.display='block'; res.style.color='var(--color-error)'; res.textContent='Erreur: '+err.message; res.style.opacity='1'; }
+}
+let toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+// Boot
+connectWS();
+</script>
+</body>
+</html>
