@@ -1,7 +1,7 @@
 # app_flask.py  -  steam_prop_vision (Pi headless)
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-import os, time, threading, argparse
+import os, time, threading, argparse, socket
 os.environ.setdefault('OPENCV_LOG_LEVEL', 'SILENT')
 
 from flask import Flask, Response, request, jsonify, send_file
@@ -23,6 +23,44 @@ LOOP_INTERVAL = 0.05   # ~20 fps
 
 _DASHBOARD = os.path.join(os.path.dirname(__file__), 'monitor', 'dashboard.html')
 
+# ── Loxone UDP ─────────────────────────────────────────────────────────────────
+LOXONE_IP      = os.environ.get('LOXONE_IP',   '192.168.1.50')
+LOXONE_PORT    = int(os.environ.get('LOXONE_PORT', '7777'))
+LOXONE_ENABLED = os.environ.get('LOXONE_ENABLED', '1') not in ('0', 'false', 'False', 'no')
+
+# Anti-spam : délai minimum entre deux envois du même message (secondes)
+_LOX_COOLDOWN  = 2.0
+_lox_last_sent: dict[str, float] = {}
+_lox_lock = threading.Lock()
+
+def lox_send(msg: str, force: bool = False) -> bool:
+    """
+    Envoie un message UDP au Miniserver Loxone.
+    Retourne True si envoyé, False si throttlé ou désactivé.
+    Anti-spam : un même message ne peut être renvoyé qu'après _LOX_COOLDOWN secondes.
+    """
+    if not LOXONE_ENABLED:
+        return False
+    now = time.time()
+    with _lox_lock:
+        last = _lox_last_sent.get(msg, 0.0)
+        if not force and (now - last) < _LOX_COOLDOWN:
+            return False
+        _lox_last_sent[msg] = now
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.settimeout(0.2)
+            s.sendto(msg.encode('utf-8'), (LOXONE_IP, LOXONE_PORT))
+        print(f"[loxone] → {LOXONE_IP}:{LOXONE_PORT}  '{msg}'")
+        return True
+    except Exception as e:
+        print(f"[loxone] ERR send '{msg}': {e}")
+        return False
+
+def lox_send_value(key: str, value: float) -> bool:
+    """Envoie un message analogique : 'key VALUE' (ex: 'presence 0.92')."""
+    return lox_send(f"{key} {value:.3f}")
+
 # ── Globals ──────────────────────────────────────────────────────────────────
 app        = Flask(__name__)
 engine     = SimulationEngine()
@@ -36,8 +74,11 @@ _status       = {
     "fsm": "IDLE", "presence": False, "presence_score": 0.0,
     "plaque": None, "plaque_score": 0.0, "t": 0.0,
     "action_log": [], "config_folder": None,
+    "loxone_ip": LOXONE_IP, "loxone_port": LOXONE_PORT, "loxone_enabled": LOXONE_ENABLED,
 }
 _presence_prev    = False
+_plaque_prev: str | None = None
+_fsm_prev: str            = "IDLE"
 _action_log_lines = []
 
 # ── Picamera2 ─────────────────────────────────────────────────────────────────
@@ -54,7 +95,7 @@ def init_camera() -> Picamera2:
 
 # ── Pipeline thread ───────────────────────────────────────────────────────────
 def pipeline_loop(cam: Picamera2):
-    global _latest_frame, _presence_prev, _action_log_lines
+    global _latest_frame, _presence_prev, _plaque_prev, _fsm_prev, _action_log_lines
 
     while True:
         t0 = time.time()
@@ -65,15 +106,25 @@ def pipeline_loop(cam: Picamera2):
         validated = rules.process_frame(frame)
 
         action_lines = []
+
+        # ── PRÉSENCE : front montant (absent → présent)
         if validated.presence and not _presence_prev:
             action_lines += router.handle(
                 key="presence", presence=True,
                 sim_engine=engine,
                 default_conf=max(0.0, min(1.0, validated.presence_score)),
             )
+            lox_send("presence")
+            lox_send_value("presence_score", validated.presence_score)
+
+        # ── PRÉSENCE : front descendant (présent → absent)
+        if not validated.presence and _presence_prev:
+            lox_send("presence_off")
+
         _presence_prev = bool(validated.presence)
 
-        if validated.plaque_id:
+        # ── PLAQUE : nouvelle plaque détectée
+        if validated.plaque_id and validated.plaque_id != _plaque_prev:
             action_lines += router.handle(
                 key=f"PLAQUE:{validated.plaque_id}",
                 presence=validated.presence,
@@ -84,6 +135,15 @@ def pipeline_loop(cam: Picamera2):
                 f"PLAQUE:{validated.plaque_id}",
                 max(0.0, min(1.0, validated.plaque_score)),
             )
+            plaque_key = f"PLAQUE_{validated.plaque_id.upper().replace(' ', '_').replace('-', '_')}"
+            lox_send(plaque_key)
+            lox_send_value(f"{plaque_key}_score", validated.plaque_score)
+
+        # ── PLAQUE : disparition
+        if not validated.plaque_id and _plaque_prev:
+            lox_send("plaque_off")
+
+        _plaque_prev = validated.plaque_id
 
         if validated.presence:
             engine.inject_detection("presence",
@@ -107,6 +167,17 @@ def pipeline_loop(cam: Picamera2):
         _action_log_lines = (action_lines + _action_log_lines)[:50]
 
         snap = engine.snapshot()
+        fsm_state = snap["fsm"]["state"]
+
+        # ── FSM : changement d'état
+        if fsm_state != _fsm_prev:
+            lox_send(f"FSM_{fsm_state}")
+            if fsm_state == "DONE":
+                lox_send("STEAM_RUN_OK", force=True)
+            elif fsm_state == "ERROR":
+                lox_send("STEAM_ERROR", force=True)
+            _fsm_prev = fsm_state
+
         cv2.putText(frame,
             f"presence={validated.presence} score={validated.presence_score:.2f}"
             f" ({rules.last_presence.detail})",
@@ -118,14 +189,16 @@ def pipeline_loop(cam: Picamera2):
                           f" good={rules.last_plaque.good_matches}")
         cv2.putText(frame, plaque_txt,
             (10, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2)
-        fsm = snap["fsm"]
-        cv2.putText(frame, f"FSM:{fsm['state']} t={snap['t']:.1f}s",
+        cv2.putText(frame, f"FSM:{fsm_state} t={snap['t']:.1f}s",
             (10, 72), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 200, 255), 2)
+        lox_str = f"LOX:{LOXONE_IP}:{LOXONE_PORT}" if LOXONE_ENABLED else "LOX:OFF"
+        cv2.putText(frame, lox_str,
+            (10, 96), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (180, 180, 60), 1)
 
         with _lock:
             _latest_frame = frame.copy()
             _status.update({
-                "fsm": fsm["state"],
+                "fsm": fsm_state,
                 "presence": bool(validated.presence),
                 "presence_score": round(validated.presence_score, 3),
                 "plaque": validated.plaque_id,
@@ -133,6 +206,9 @@ def pipeline_loop(cam: Picamera2):
                 "t": round(snap["t"], 1),
                 "action_log": _action_log_lines[:10],
                 "config_folder": _status.get("config_folder"),
+                "loxone_ip": LOXONE_IP,
+                "loxone_port": LOXONE_PORT,
+                "loxone_enabled": LOXONE_ENABLED,
             })
 
         elapsed = time.time() - t0
@@ -176,7 +252,8 @@ def index():
   <b>FSM:</b> <span id="fsm">-</span> &nbsp;|&nbsp; <b>t:</b> <span id="time">-</span><br>
   <b>Presence:</b> <span id="presence">-</span><br>
   <b>Plaque:</b> <span id="plaque">-</span><br>
-  <b>Config:</b> <span id="config">-</span>
+  <b>Config:</b> <span id="config">-</span><br>
+  <b>Loxone:</b> <span id="loxone">-</span>
 </div>
 <div class="card" id="actions"><b>Action log:</b><br>(none)</div>
 <hr>
@@ -198,6 +275,7 @@ function refresh() {
         document.getElementById('presence').textContent = s.presence + ' (' + s.presence_score + ')';
         document.getElementById('plaque').textContent   = (s.plaque || 'none') + ' (' + s.plaque_score + ')';
         document.getElementById('config').textContent   = s.config_folder || '(none)';
+        document.getElementById('loxone').textContent   = (s.loxone_enabled ? '\u2713 ' : '\u2717 ') + s.loxone_ip + ':' + s.loxone_port;
       }
       if (JSON.stringify(s.action_log) !== JSON.stringify(prev.action_log)) {
         document.getElementById('actions').innerHTML =
@@ -233,6 +311,22 @@ def stream():
 def api_status():
     with _lock:
         return jsonify(_status)
+
+@app.route('/api/loxone', methods=['POST'])
+def api_loxone():
+    """Envoie manuellement un message UDP Loxone (test / debug).
+    Body JSON : {"msg": "PLAQUE_BOIS", "value": 0.95}  (value optionnel)
+    """
+    data  = request.json or {}
+    msg   = str(data.get('msg', '')).strip()
+    value = data.get('value', None)
+    if not msg:
+        return jsonify({"error": "msg required"}), 400
+    if value is not None:
+        sent = lox_send_value(msg, float(value))
+    else:
+        sent = lox_send(msg, force=True)
+    return jsonify({"ok": sent, "msg": msg, "target": f"{LOXONE_IP}:{LOXONE_PORT}"})
 
 @app.route('/api/config', methods=['POST'])
 def api_config():
@@ -277,9 +371,17 @@ def api_inject():
 # ── Entry point ───────────────────────────────────────────────────────────────
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', default='', help='Config folder to load at startup')
-    parser.add_argument('--port',   default=FLASK_PORT, type=int)
+    parser.add_argument('--config',       default='',          help='Config folder to load at startup')
+    parser.add_argument('--port',         default=FLASK_PORT,  type=int)
+    parser.add_argument('--loxone-ip',    default=LOXONE_IP,   help='IP du Miniserver Loxone')
+    parser.add_argument('--loxone-port',  default=LOXONE_PORT, type=int, help='Port UDP Loxone')
+    parser.add_argument('--no-loxone',    action='store_true', help="Désactiver l'envoi UDP Loxone")
     args = parser.parse_args()
+
+    LOXONE_IP      = args.loxone_ip
+    LOXONE_PORT    = args.loxone_port
+    LOXONE_ENABLED = not args.no_loxone
+    _status.update({"loxone_ip": LOXONE_IP, "loxone_port": LOXONE_PORT, "loxone_enabled": LOXONE_ENABLED})
 
     cam = init_camera()
 
@@ -299,6 +401,8 @@ if __name__ == '__main__':
     t = threading.Thread(target=pipeline_loop, args=(cam,), daemon=True)
     t.start()
 
-    print(f"[flask] Listening on http://0.0.0.0:{args.port}")
-    print(f"[flask] Monitor: http://0.0.0.0:{args.port}/monitor")
+    lox_status = f"{LOXONE_IP}:{LOXONE_PORT}" if LOXONE_ENABLED else "DISABLED"
+    print(f"[flask]  Listening on http://0.0.0.0:{args.port}")
+    print(f"[flask]  Monitor:    http://0.0.0.0:{args.port}/monitor")
+    print(f"[loxone] Target:     {lox_status}")
     app.run(host='0.0.0.0', port=args.port, threaded=True)
