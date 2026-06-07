@@ -45,6 +45,87 @@ CONFIG_FILE = "config/features.yaml"
 LOG_FILE    = "logs/steam_vision.log"
 
 
+# ── MJPEG stream (optionnel, thread daemon) ────────────────────────
+import socketserver
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+_stream_frame:       bytes | None = None
+_stream_lock                      = threading.Lock()
+_stream_last_update: float        = 0.0
+
+def _update_stream_frame(frame, fps_limit: float = 20.0) -> None:
+    """Encode la frame courante en JPEG et la partage avec le serveur MJPEG.
+    Throttlé à fps_limit pour ne pas impacter le pipeline principal."""
+    global _stream_frame, _stream_last_update
+    now = time.time()
+    if now - _stream_last_update < 1.0 / fps_limit:
+        return
+    _stream_last_update = now
+    try:
+        ok, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        if ok:
+            with _stream_lock:
+                _stream_frame = buf.tobytes()
+    except Exception:
+        pass
+
+
+class _ThreadedHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
+    daemon_threads = True
+
+
+def _start_mjpeg_server(port: int = 5050) -> None:
+    """Démarre un serveur MJPEG minimal en thread daemon.
+    Si ça plante, le pipeline principal continue sans le stream."""
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args): pass  # silence logs HTTP
+
+        def do_GET(self):
+            if self.path == '/':
+                body = (b'<!DOCTYPE html><html>'
+                        b'<body style="background:#111;margin:0">'
+                        b'<img src="/stream" style="max-width:100%;display:block">'
+                        b'</body></html>')
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/html')
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            elif self.path == '/stream':
+                self.send_response(200)
+                self.send_header('Content-Type',
+                                 'multipart/x-mixed-replace; boundary=frame')
+                self.end_headers()
+                try:
+                    while True:
+                        with _stream_lock:
+                            data = _stream_frame
+                        if data is None:
+                            time.sleep(0.05)
+                            continue
+                        self.wfile.write(
+                            b'--frame\r\nContent-Type: image/jpeg\r\n\r\n'
+                            + data + b'\r\n'
+                        )
+                        time.sleep(0.05)   # ~20 fps côté client
+                except Exception:
+                    pass
+            else:
+                self.send_response(404)
+                self.end_headers()
+
+    def _run():
+        try:
+            srv = _ThreadedHTTPServer(('0.0.0.0', port), Handler)
+            log.info(f"[stream] MJPEG  →  http://0.0.0.0:{port}/stream")
+            srv.serve_forever()
+        except Exception as e:
+            log.warning(f"[stream] Désactivé — {e}")
+
+    threading.Thread(target=_run, daemon=True, name="mjpeg-stream").start()
+
+
 # ── Logging ────────────────────────────────────────────────────────
 
 def setup_logging():
@@ -222,6 +303,7 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
             time.sleep(0.01)
             continue
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        _update_stream_frame(frame)
         frame_count += 1
         now = time.time()
 
@@ -345,6 +427,7 @@ def run_person_mode(cfg, cam, rule_engine, audio, video):
             time.sleep(0.01)
             continue
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        _update_stream_frame(frame)
         frame_count += 1
         now = time.time()
 
@@ -390,6 +473,8 @@ def main():
     rule_api_on   = cfg.get("enable_rule_api",  True)
     heartbeat_on  = cfg.get("enable_heartbeat", True)
     listen_port   = cfg.get("udp_listen_port",  8888)
+    stream_on     = cfg.get("enable_stream",    True)
+    stream_port   = cfg.get("stream_port",      5050)
 
     log.info("=" * 55)
     log.info("  S.T.E.A.M Vision — STYX  |  Pi 5")
@@ -400,6 +485,7 @@ def main():
     log.info("  Idle after  : " + str(cfg.get("idle_after_s", 3.0)) + "s")
     log.info("  Monitor WS  : " + ("ON :8889" if monitor_on else "OFF"))
     log.info("  Rule API    : " + ("ON :8890" if rule_api_on else "OFF"))
+    log.info("  Stream MJPEG: " + (f"ON :{stream_port}" if stream_on else "OFF"))
 
     rule_engine = RuleEngine("config/rules.yaml")
     audio       = AudioPlayer("assets/audio")
@@ -409,6 +495,8 @@ def main():
         start_ws()
     if rule_api_on:
         start_rule_api(engine=rule_engine)
+    if stream_on:
+        _start_mjpeg_server(port=stream_port)
     if heartbeat_on:
         HeartbeatThread(interval=5.0).start()
 
