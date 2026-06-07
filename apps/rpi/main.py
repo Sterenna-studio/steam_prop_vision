@@ -27,6 +27,8 @@ import threading
 from pathlib import Path
 from enum import Enum, auto
 
+import json
+
 import cv2
 import yaml
 from picamera2 import Picamera2
@@ -38,7 +40,7 @@ from steamcore.udp                         import send_event as udp_send_raw, He
 from steamcore.recognition.fast_detector   import FastDetector
 from steamcore.recognition.card_detector   import CardDetector
 from steamcore.recognition.card_recognizer import CardRecognizer
-from monitor.ws_bridge                     import start_in_thread as start_ws, push_event
+from monitor.ws_bridge                     import start_in_thread as start_ws, push_event as _push_event_raw
 from monitor.rule_api                      import start_in_thread as start_rule_api
 
 CONFIG_FILE = "config/features.yaml"
@@ -82,13 +84,19 @@ def _start_mjpeg_server(port: int = 5050) -> None:
         def log_message(self, *args): pass  # silence logs HTTP
 
         def do_GET(self):
-            if self.path == '/':
-                body = (b'<!DOCTYPE html><html>'
-                        b'<body style="background:#111;margin:0">'
-                        b'<img src="/stream" style="max-width:100%;display:block">'
-                        b'</body></html>')
+            if self.path in ('/', '/view'):
+                body = _VIEW_HTML
                 self.send_response(200)
-                self.send_header('Content-Type', 'text/html')
+                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            elif self.path == '/api/status':
+                with _view_lock:
+                    data = dict(_view_status)
+                body = json.dumps(data).encode()
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
                 self.send_header('Content-Length', str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
@@ -124,6 +132,126 @@ def _start_mjpeg_server(port: int = 5050) -> None:
             log.warning(f"[stream] Désactivé — {e}")
 
     threading.Thread(target=_run, daemon=True, name="mjpeg-stream").start()
+
+
+# ── View status (partagé pipeline → HTTP) ─────────────────────────
+_view_status: dict = {
+    "fsm": "IDLE", "card_id": None, "card_label": None, "hold_pct": 0,
+}
+_view_lock = threading.Lock()
+
+
+def push_event(event: dict) -> None:
+    """Transmet l'event au WebSocket ET met à jour le statut view."""
+    _push_event_raw(event)
+    t = event.get("type")
+    if t == "state":
+        st = event.get("state", "")
+        with _view_lock:
+            _view_status["fsm"] = st
+            if st == "IDLE":
+                _view_status["card_id"]    = None
+                _view_status["card_label"] = None
+                _view_status["hold_pct"]   = 0
+    elif t == "card_detected":
+        with _view_lock:
+            _view_status["card_id"]    = event.get("card_id")
+            _view_status["card_label"] = event.get("label")
+    elif t == "hold":
+        with _view_lock:
+            _view_status["hold_pct"] = event.get("pct", 0)
+
+
+# ── Page /view ─────────────────────────────────────────────────────
+_VIEW_HTML = b"""<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>S.T.E.A.M \xe2\x80\x94 View</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#000;color:#fff;font-family:monospace;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+#wrap{flex:1;position:relative;overflow:hidden;background:#111}
+#stream{width:100%;height:100%;object-fit:contain;display:block}
+#hold{position:absolute;bottom:14px;left:5%;right:5%;display:none}
+#hold-track{background:rgba(255,255,255,.15);border-radius:6px;height:8px;overflow:hidden}
+#hold-fill{height:8px;background:#00e5cc;border-radius:6px;width:0%;transition:width .1s linear}
+#hold-txt{text-align:center;margin-top:5px;font-size:13px;color:#00e5cc;text-shadow:0 0 8px #00e5cc}
+#standby{position:absolute;inset:0;background:rgba(0,0,0,.78);display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+#standby .icon{font-size:72px;color:#00e5cc;text-shadow:0 0 40px #00e5cc88}
+#standby .name{font-size:clamp(18px,3vw,32px);letter-spacing:.12em}
+#standby .sub{font-size:13px;color:#888;letter-spacing:.08em}
+#bar{height:44px;background:rgba(0,0,0,.92);border-top:1px solid #1a1a1a;display:flex;align-items:center;padding:0 18px;gap:20px;font-size:12px}
+.badge{padding:2px 9px;border-radius:3px;font-weight:bold;letter-spacing:.08em;font-size:11px}
+#fsm-b{background:#222;color:#666}
+#fsm-b.idle{background:#0d1f0d;color:#4caf50}
+#fsm-b.standby{background:#001f1f;color:#00e5cc}
+#card-d{color:#bbb}
+#ws-d{margin-left:auto;font-size:10px;color:#444}
+#ws-d.ok{color:#4caf50}
+#ws-d.err{color:#e53935}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <img id="stream" src="/stream" alt="">
+  <div id="hold">
+    <div id="hold-track"><div id="hold-fill"></div></div>
+    <div id="hold-txt"></div>
+  </div>
+  <div id="standby">
+    <div class="icon">&#9654;</div>
+    <div class="name" id="sb-name">\xe2\x80\x94</div>
+    <div class="sub">en cours de lecture</div>
+  </div>
+</div>
+<div id="bar">
+  <span>FSM&nbsp;<span id="fsm-b" class="badge idle">IDLE</span></span>
+  <span id="card-d">\xe2\x80\x94</span>
+  <span id="ws-d">&#9679; ws\xe2\x80\xa6</span>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const fsmEl=$('fsm-b'),cardEl=$('card-d'),wsEl=$('ws-d');
+const holdEl=$('hold'),holdFill=$('hold-fill'),holdTxt=$('hold-txt');
+const sbEl=$('standby'),sbName=$('sb-name');
+
+function fsm(s){
+  fsmEl.textContent=s;
+  fsmEl.className='badge '+(s==='STANDBY'?'standby':'idle');
+}
+function handle(ev){
+  if(ev.type==='state'){
+    fsm(ev.state);
+    if(ev.state==='STANDBY'){sbEl.style.display='flex';holdEl.style.display='none';}
+    else{sbEl.style.display='none';if(ev.state==='IDLE'){holdEl.style.display='none';cardEl.textContent='\xe2\x80\x94';}}
+  }else if(ev.type==='card_detected'){
+    cardEl.textContent=ev.label;sbName.textContent=ev.label;
+  }else if(ev.type==='hold'){
+    holdEl.style.display='block';
+    holdFill.style.width=ev.pct+'%';
+    holdTxt.textContent=ev.label+'  '+ev.pct+'%';
+    cardEl.textContent=ev.label;
+  }
+}
+function connect(){
+  const ws=new WebSocket('ws://'+location.hostname+':8889');
+  ws.onopen=()=>{wsEl.textContent='● connect\xe9';wsEl.className='ok';};
+  ws.onclose=()=>{wsEl.textContent='○ reconnexion\xe2\x80\xa6';wsEl.className='err';setTimeout(connect,3000);};
+  ws.onerror=()=>ws.close();
+  ws.onmessage=e=>{try{handle(JSON.parse(e.data));}catch(_){}};
+}
+fetch('/api/status').then(r=>r.json()).then(s=>{
+  fsm(s.fsm||'IDLE');
+  if(s.card_label){cardEl.textContent=s.card_label;sbName.textContent=s.card_label;}
+  if(s.fsm==='STANDBY'){sbEl.style.display='flex';}
+}).catch(()=>{});
+connect();
+</script>
+</body>
+</html>
+"""
 
 
 # ── Logging ────────────────────────────────────────────────────────
@@ -485,7 +613,8 @@ def main():
     log.info("  Idle after  : " + str(cfg.get("idle_after_s", 3.0)) + "s")
     log.info("  Monitor WS  : " + ("ON :8889" if monitor_on else "OFF"))
     log.info("  Rule API    : " + ("ON :8890" if rule_api_on else "OFF"))
-    log.info("  Stream MJPEG: " + (f"ON :{stream_port}" if stream_on else "OFF"))
+    log.info("  Stream MJPEG: " + (f"ON  http://0.0.0.0:{stream_port}/stream" if stream_on else "OFF"))
+    log.info("  View page   : " + (f"ON  http://0.0.0.0:{stream_port}/view"   if stream_on else "OFF"))
 
     rule_engine = RuleEngine("config/rules.yaml")
     audio       = AudioPlayer("assets/audio")
