@@ -11,9 +11,13 @@ from steamcore.camera import Camera
 from steamcore.recognition.pipeline import RecognitionPipeline
 
 CONFIG_FILE  = Path(__file__).parent / "config.json"
-ASSETS_DIR   = Path(__file__).parent / "assets" / "video"  # sans 's'
+ASSETS_DIR   = Path(__file__).parent / "assets" / "video"
 COOLDOWN_SEC = 10
 DEBUG_W, DEBUG_H = 1280, 480
+
+# FPS throttle boucle principale (traitement caméra)
+MAIN_LOOP_FPS = 15
+_FRAME_INTERVAL = 1.0 / MAIN_LOOP_FPS
 
 
 def load_config() -> dict:
@@ -125,16 +129,26 @@ def main() -> None:
     if debug_mode:
         cv2.namedWindow("S.T.E.A.M Vision", cv2.WINDOW_NORMAL)
         cv2.resizeWindow("S.T.E.A.M Vision", DEBUG_W, DEBUG_H)
-        print("[main] Mode DEBUG  (appuyer sur 'q' pour quitter)")
+        print(f"[main] Mode DEBUG  (appuyer sur 'q' pour quitter) — throttle {MAIN_LOOP_FPS} FPS")
     else:
-        print("[main] Mode ESCAPE  (Ctrl+C pour quitter)")
+        print(f"[main] Mode ESCAPE  (Ctrl+C pour quitter) — throttle {MAIN_LOOP_FPS} FPS")
 
     cooldown: dict[str, float] = {}
     last_id:  str | None       = None
     HALF = DEBUG_W // 2
 
+    _last_frame_time = 0.0
+
     try:
         while True:
+            # ── FPS throttle : limite la boucle à MAIN_LOOP_FPS ──────────
+            now = time.time()
+            elapsed = now - _last_frame_time
+            if elapsed < _FRAME_INTERVAL:
+                time.sleep(_FRAME_INTERVAL - elapsed)
+            _last_frame_time = time.time()
+            # ─────────────────────────────────────────────────────────────
+
             ok, frame = cam.read()
             if not ok:
                 time.sleep(0.01)

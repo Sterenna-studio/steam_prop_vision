@@ -23,6 +23,83 @@ except ImportError:
     print("[rules] WARN: pyyaml manquant, fallback JSON -> pip install pyyaml")
 
 
+# ── Constantes de validation ───────────────────────────────────────────────
+_VALID_ACTION_TYPES = {"audio", "video", "image", "udp", "http"}
+_COOLDOWN_MIN, _COOLDOWN_MAX = 0.0, 3600.0
+_MIN_DURATION_MIN, _MIN_DURATION_MAX = 0.0, 60.0
+
+
+class RulesSchemaError(ValueError):
+    """Levée quand rules.yaml ne respecte pas le schéma attendu."""
+
+
+def validate_rules_schema(raw: dict) -> None:
+    """
+    Valide la structure de rules.yaml.
+    Lève RulesSchemaError avec un message explicite si quelque chose cloche.
+    """
+    if not isinstance(raw, dict):
+        raise RulesSchemaError("rules.yaml : la racine doit être un mapping YAML")
+
+    # Section default optionnelle
+    if "default" in raw:
+        _validate_rule_entry("__default__", raw["default"])
+
+    # Section rules obligatoire (peut être vide)
+    rules_section = raw.get("rules", {})
+    if not isinstance(rules_section, dict):
+        raise RulesSchemaError("rules.yaml : 'rules' doit être un mapping")
+
+    for label, cfg in rules_section.items():
+        _validate_rule_entry(label, cfg)
+
+
+def _validate_rule_entry(label: str, cfg: Any) -> None:
+    if not isinstance(cfg, dict):
+        raise RulesSchemaError(f"[{label}] doit être un mapping, reçu : {type(cfg).__name__}")
+
+    # enabled
+    enabled = cfg.get("enabled", True)
+    if not isinstance(enabled, bool):
+        raise RulesSchemaError(f"[{label}].enabled doit être un booléen (true/false)")
+
+    # cooldown
+    cooldown = cfg.get("cooldown", 5.0)
+    try:
+        cooldown = float(cooldown)
+    except (TypeError, ValueError):
+        raise RulesSchemaError(f"[{label}].cooldown doit être un nombre")
+    if not (_COOLDOWN_MIN <= cooldown <= _COOLDOWN_MAX):
+        raise RulesSchemaError(
+            f"[{label}].cooldown={cooldown} hors plage [{_COOLDOWN_MIN}, {_COOLDOWN_MAX}]s"
+        )
+
+    # min_duration
+    min_dur = cfg.get("min_duration", 0.0)
+    try:
+        min_dur = float(min_dur)
+    except (TypeError, ValueError):
+        raise RulesSchemaError(f"[{label}].min_duration doit être un nombre")
+    if not (_MIN_DURATION_MIN <= min_dur <= _MIN_DURATION_MAX):
+        raise RulesSchemaError(
+            f"[{label}].min_duration={min_dur} hors plage [{_MIN_DURATION_MIN}, {_MIN_DURATION_MAX}]s"
+        )
+
+    # actions
+    actions = cfg.get("actions", [])
+    if not isinstance(actions, list):
+        raise RulesSchemaError(f"[{label}].actions doit être une liste")
+    for i, action in enumerate(actions):
+        if not isinstance(action, dict):
+            raise RulesSchemaError(f"[{label}].actions[{i}] doit être un mapping")
+        atype = action.get("type", "")
+        if atype not in _VALID_ACTION_TYPES:
+            raise RulesSchemaError(
+                f"[{label}].actions[{i}].type='{atype}' invalide. "
+                f"Valeurs acceptées : {sorted(_VALID_ACTION_TYPES)}"
+            )
+
+
 @dataclass
 class ActionDef:
     type: str                     # audio | video | image | udp | http
@@ -67,6 +144,14 @@ class RuleEngine:
             print(f"[rules] Config introuvable : {self.config_path} — règles vides")
             return
         raw = self._load_file()
+
+        # Validation schéma avant parsing
+        try:
+            validate_rules_schema(raw)
+        except RulesSchemaError as exc:
+            print(f"[rules] ERREUR schéma — rechargement annulé : {exc}")
+            return
+
         rules_raw = raw.get("rules", {})
         default_raw = raw.get("default", {})
 
