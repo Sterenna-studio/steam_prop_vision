@@ -24,3 +24,6 @@ PATCHES/CHANGELOG_patch_camera_manager_v2.md
 PATCHES/CHANGELOG_patch_generic_detectors.md
 PATCHES/CHANGELOG_patch_no_cam_startup.md
 PATCHES/requirements_update.md
+
+# Modèles YOLO — télécharger via : python download_model.py
+*.pt
