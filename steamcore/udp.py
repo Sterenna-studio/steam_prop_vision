@@ -1,8 +1,12 @@
 """
 steamcore/udp.py
-- send_event()   : envoie un message UDP à Loxone
-- broadcast()    : envoie STEAM_RUN_OK en broadcast LAN
-- UDPListener    : écoute les ACK/commandes entrants
+- send_event()          : envoie un message UDP à Loxone (fire-and-forget)
+- send_event_reliable() : idem + attend un ACK:<msg> en retour, retente sinon
+- broadcast()           : envoie STEAM_RUN_OK en broadcast LAN
+- UDPListener           : écoute les ACK/commandes entrants
+
+Voir LOXONE.md pour le catalogue complet des messages et ce que Loxone doit
+implémenter côté Miniserver pour participer aux ACK.
 """
 
 from __future__ import annotations
@@ -13,6 +17,7 @@ import threading
 BROADCAST_PORT = 9999
 LOXONE_PORT = 7777
 LISTEN_PORT = 8888
+ACK_PREFIX = "ACK:"
 
 
 def send_event(msg: str, ip: str, port: int = LOXONE_PORT) -> None:
@@ -20,6 +25,49 @@ def send_event(msg: str, ip: str, port: int = LOXONE_PORT) -> None:
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
         s.sendto(msg.encode(), (ip, port))
     print(f"[udp] → {ip}:{port}  {msg}")
+
+
+# ── ACK (Loxone -> STYX, réponse à send_event_reliable) ────────────────────
+_ack_waiters: dict[str, threading.Event] = {}
+_ack_lock = threading.Lock()
+
+
+def _notify_ack(msg: str) -> None:
+    """Appelé par UDPListener à la réception de 'ACK:<msg>'."""
+    with _ack_lock:
+        ev = _ack_waiters.pop(msg, None)
+    if ev:
+        ev.set()
+
+
+def send_event_reliable(
+    msg: str,
+    ip: str,
+    port: int = LOXONE_PORT,
+    retries: int = 2,
+    timeout: float = 1.0,
+) -> bool:
+    """Envoie msg et attend 'ACK:<msg>' en retour (via UDPListener).
+
+    Retente jusqu'à `retries` fois si pas d'ACK dans `timeout`s. Bloquant —
+    à lancer dans un thread depuis un appelant temps réel. Le message part
+    systématiquement à chaque tentative (fire-and-forget préservé) : si
+    Loxone ne participe pas à l'ACK, le comportement reste au moins aussi
+    bon qu'un send_event() simple, jamais pire.
+    """
+    for attempt in range(retries + 1):
+        ev = threading.Event()
+        with _ack_lock:
+            _ack_waiters[msg] = ev
+        send_event(msg, ip, port)
+        if ev.wait(timeout):
+            return True
+        with _ack_lock:
+            _ack_waiters.pop(msg, None)
+        if attempt < retries:
+            print(f"[udp] Pas d'ACK pour {msg!r} — nouvelle tentative")
+    print(f"[udp] ERREUR : aucun ACK pour {msg!r} après {retries + 1} envoi(s)")
+    return False
 
 
 def broadcast(msg: str = "STEAM_RUN_OK", port: int = BROADCAST_PORT) -> None:
@@ -69,7 +117,11 @@ class UDPListener(threading.Thread):
             while not self._stop_event.is_set():
                 try:
                     data, addr = s.recvfrom(1024)
-                    self.on_message(data.decode().strip(), addr)
+                    msg = data.decode().strip()
+                    if msg.startswith(ACK_PREFIX):
+                        _notify_ack(msg[len(ACK_PREFIX) :])
+                    else:
+                        self.on_message(msg, addr)
                 except socket.timeout:
                     continue
 

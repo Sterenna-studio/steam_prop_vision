@@ -41,7 +41,12 @@ from picamera2 import Picamera2
 from steamcore.audio import AudioPlayer
 from steamcore.video_player import VideoPlayer
 from steamcore.rules import RuleEngine
-from steamcore.udp import send_event as udp_send_raw, HeartbeatThread, UDPListener
+from steamcore.udp import (
+    send_event as udp_send_raw,
+    send_event_reliable,
+    HeartbeatThread,
+    UDPListener,
+)
 from steamcore.recognition.fast_detector import FastDetector
 from steamcore.recognition.card_detector import CardDetector
 from steamcore.recognition.card_recognizer import CardRecognizer
@@ -267,6 +272,33 @@ def _watchdog_loop(timeout_s: float) -> None:
                 "-> arrêt forcé (systemd relancera)"
             )
             os._exit(1)
+
+
+# ── Commandes entrantes Loxone (voir LOXONE.md) ─────────────────────
+# Positionné par _handle_loxone_command() sur réception de STEAM_RESET,
+# vérifié à chaque itération des boucles run_card_mode()/run_person_mode().
+_force_reset = threading.Event()
+
+
+def _handle_loxone_command(msg, addr, cfg, rule_engine, audio, video) -> None:
+    """Dispatche les commandes reçues de Loxone sur udp_listen_port."""
+    log.info("[UDP RX] " + addr[0] + " -> " + msg)
+    push_event({"type": "udp_rx", "msg": msg, "from": addr[0]})
+
+    if msg == "STEAM_PING":
+        udp_send_raw("STEAM_PONG", addr[0], cfg.get("loxone_port", 7777))
+    elif msg == "STEAM_RESET":
+        log.info("[loxone] STEAM_RESET reçu -> retour IDLE forcé")
+        _force_reset.set()
+    elif msg.startswith("STEAM_TRIGGER:"):
+        card_id = msg[len("STEAM_TRIGGER:") :]
+        log.info(f"[loxone] STEAM_TRIGGER reçu -> {card_id}")
+        threading.Thread(
+            target=run_actions,
+            args=(cfg, rule_engine, card_id, audio, video),
+            daemon=True,
+            name="loxone-trigger",
+        ).start()
 
 
 def push_event(event: dict) -> None:
@@ -527,12 +559,19 @@ class State(Enum):
 
 
 def udp_send(msg, ip, port):
-    """Envoie UDP + pousse l'event sur le monitor WS."""
-    try:
-        udp_send_raw(msg, ip, port)
-    except Exception as e:
-        log.error("[udp] ERREUR : " + str(e))
+    """Envoie UDP (ACK+retry en tâche de fond, non-bloquant) + event WS."""
     push_event({"type": "udp_sent", "msg": msg, "ip": ip, "port": port})
+
+    def _send():
+        try:
+            ok = send_event_reliable(msg, ip, port)
+        except Exception as e:
+            log.error("[udp] ERREUR : " + str(e))
+            ok = False
+        if not ok:
+            push_event({"type": "udp_ack_failed", "msg": msg, "ip": ip, "port": port})
+
+    threading.Thread(target=_send, daemon=True, name="udp-send").start()
 
 
 def run_actions(cfg, rule_engine, label_or_result, audio, video, card_id=None):
@@ -646,6 +685,16 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
         _update_stream_frame(frame)
         frame_count += 1
         now = time.time()
+
+        if _force_reset.is_set():
+            _force_reset.clear()
+            video.stop()
+            audio.stop()
+            state = State.IDLE
+            _reset_detection()
+            log.info("[state] -> IDLE (reset Loxone)")
+            push_event({"type": "state", "state": "IDLE"})
+            continue
 
         if state == State.STANDBY:
             elapsed = now - last_triggered
@@ -805,6 +854,16 @@ def run_person_mode(cfg, cam, rule_engine, audio, video):
         frame_count += 1
         now = time.time()
 
+        if _force_reset.is_set():
+            _force_reset.clear()
+            video.stop()
+            audio.stop()
+            state = State.IDLE
+            tracker.reset()
+            log.info("[state] -> IDLE (reset Loxone)")
+            push_event({"type": "state", "state": "IDLE"})
+            continue
+
         if state == State.STANDBY:
             if now - last_triggered >= idle_after_s:
                 state = State.IDLE
@@ -901,9 +960,8 @@ def main():
 
     UDPListener(
         port=listen_port,
-        on_message=lambda msg, addr: (
-            log.info("[UDP RX] " + addr[0] + " -> " + msg),
-            push_event({"type": "udp_rx", "msg": msg, "from": addr[0]}),
+        on_message=lambda msg, addr: _handle_loxone_command(
+            msg, addr, cfg, rule_engine, audio, video
         ),
     ).start()
 

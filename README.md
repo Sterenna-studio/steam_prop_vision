@@ -190,6 +190,10 @@ send_event("STEAM_CARD_BOUGIE", loxone_ip, loxone_port)
 
 - **Heartbeat** : `STEAM_RUN_OK` toutes les 5s (désactivable via `enable_heartbeat`)
 - **Écoute** : port 8888 pour recevoir des commandes depuis Loxone
+- **Fiabilité** : chaque déclenchement est doublé d'une attente d'ACK + retry
+  (`send_event_reliable`), et Loxone peut piloter STYX en retour
+  (`STEAM_PING`, `STEAM_RESET`, `STEAM_TRIGGER:<card_id>`) — catalogue
+  complet des messages dans [LOXONE.md](LOXONE.md).
 
 ---
 
