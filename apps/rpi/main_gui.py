@@ -18,10 +18,16 @@ from __future__ import annotations
 import os
 import math
 import signal
+import sys
 import threading
 import time
 from enum import Enum, auto
 from pathlib import Path
+
+# Lancé via `python apps/rpi/main_gui.py` : sys.path[0] devient apps/rpi/, pas
+# la racine du dépôt -> "from steamcore..." échouerait sans cette ligne (voir
+# main.py pour le détail).
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 # ── forcer le display X11 si variable absente (Pi sans session graphique ouverte)
 os.environ.setdefault("DISPLAY", ":0")

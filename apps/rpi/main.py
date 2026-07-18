@@ -32,6 +32,13 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from enum import Enum, auto
 
+# Lancé en pratique via `python apps/rpi/main.py` (scripts/linux_run.sh,
+# deploy/steam-vision.service) : Python place alors le dossier du script
+# (apps/rpi/) en sys.path[0], PAS la racine du dépôt -> "from steamcore..."
+# échoue avec ModuleNotFoundError sans cette ligne. Même correctif déjà en
+# place dans tools/card_test.py, tools/plate_bench.py, tools/pipeline_test.py.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 import json
 
 import cv2

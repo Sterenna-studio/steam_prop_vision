@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "rule-api",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["monitor/rule_api.py"],
+      "port": 8890
+    }
+  ]
+}

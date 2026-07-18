@@ -15,6 +15,7 @@ Accéder depuis le réseau: http://<ip_pi>:8890
 """
 
 from __future__ import annotations
+import sys
 import time
 import threading
 from pathlib import Path
@@ -23,6 +24,11 @@ _HERE = Path(__file__).parent
 _ROOT = _HERE.parent
 RULES_PATH = _ROOT / "config" / "rules.yaml"
 ASSETS_PATH = _ROOT / "assets"
+
+# Lancé via `python monitor/rule_api.py` (ou importé depuis apps/rpi/main.py,
+# déjà sur le path dans ce cas) : sans cette ligne, "from steamcore..." plus
+# bas échoue en ModuleNotFoundError si le module est démarré seul.
+sys.path.insert(0, str(_ROOT))
 
 try:
     from fastapi import FastAPI, Request
