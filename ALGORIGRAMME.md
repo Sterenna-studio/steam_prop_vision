@@ -124,6 +124,6 @@ flowchart TD
     AUG --> BENCH[Validation bench\nplate_bench.py --pi]
     BENCH --> OK{Score\nsatisfaisant ?}
     OK -- NON --> P
-    OK -- OUI --> CFG[Ajouter dans\nrules.yaml + gui_setup.py]
+    OK -- OUI --> CFG[Ajouter dans\nconfig/rules.yaml]
     CFG --> PROD([✅ Plate opérationnelle])
 ```

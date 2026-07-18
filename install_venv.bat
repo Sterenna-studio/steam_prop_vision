@@ -13,8 +13,7 @@ call ".venv\Scripts\activate.bat"
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 echo.
-echo Done. You can now run:
-echo   run_gui.bat
-echo   run_builder.bat
+echo Done. Dev venv ready (requirements.txt).
+echo For the production pipeline, see README.md / INSTALL.md (apps/rpi/main.py on STYX).
 pause
 endlocal

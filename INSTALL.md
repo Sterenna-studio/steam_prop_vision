@@ -148,12 +148,13 @@ bash scripts/linux_run.sh --loxone 192.168.1.50 --no-monitor
 ### Développement (PC Salomon)
 
 ```bash
-# Lancer la GUI de setup
-run_gui.bat              # ou : python gui_setup.py
-
-# Lancer le builder de config
-run_builder.bat
+# Éditer les paramètres de la pipeline (config/features.yaml)
+python tools/feature_gui.py
 ```
+
+> `gui_setup.py`, `run_gui.bat`, `run_builder.bat` et le "Config Builder" (ancien
+> système basé sur `config.json`) sont obsolètes et ont été déplacés dans
+> [`legacy/`](../legacy/README.md) — ne pas les utiliser.
 
 ---
 
