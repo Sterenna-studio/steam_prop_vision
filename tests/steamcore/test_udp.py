@@ -4,11 +4,11 @@ Tests unitaires pour HeartbeatThread et UDPListener.
 - Port configurable via features.yaml (udp_listen_port)
 - Pas de dépendance réseau réelle (socket loopback uniquement)
 """
+
 from __future__ import annotations
 import socket
 import threading
 import time
-import pytest
 
 from steamcore.udp import HeartbeatThread, UDPListener, LISTEN_PORT
 
@@ -16,6 +16,7 @@ from steamcore.udp import HeartbeatThread, UDPListener, LISTEN_PORT
 # ---------------------------------------------------------------------------
 # Tests HeartbeatThread
 # ---------------------------------------------------------------------------
+
 
 class TestHeartbeatThread:
     def test_starts_and_stops_cleanly(self):
@@ -33,6 +34,7 @@ class TestHeartbeatThread:
 # ---------------------------------------------------------------------------
 # Tests UDPListener — port configurable
 # ---------------------------------------------------------------------------
+
 
 class TestUDPListenerPort:
     def test_default_listen_port_constant(self):

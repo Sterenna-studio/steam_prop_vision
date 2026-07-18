@@ -2,6 +2,7 @@
 tests/steamcore/recognition/test_pipeline.py
 Squelette de tests unitaires pour RecognitionPipeline.
 """
+
 import time
 import numpy as np
 import pytest
@@ -10,6 +11,7 @@ import pytest
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def dummy_frame():
@@ -23,6 +25,7 @@ def pipeline(tmp_path):
     platest = tmp_path / "PLATEST"
     platest.mkdir()
     from steamcore.recognition.pipeline import RecognitionPipeline
+
     pipe = RecognitionPipeline(platest_dir=str(platest))
     pipe.start()
     yield pipe
@@ -33,10 +36,13 @@ def pipeline(tmp_path):
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestPipelineLifecycle:
     def test_start_stop(self, pipeline):
         """Le pipeline démarre et s'arrête sans exception."""
-        assert pipeline._running is False  # stop() a été appelé par la fixture
+        assert pipeline._running is True  # start() a été appelé par la fixture
+        pipeline.stop()
+        assert pipeline._running is False
 
     def test_process_frame_no_cards_returns_none(self, pipeline, dummy_frame):
         """Sans cartes enregistrées, process_frame retourne None."""
@@ -52,8 +58,14 @@ class TestPipelineLifecycle:
         import numpy as np
 
         fake_quad = QuadROI(
-            corners=np.array([[0,0],[100,0],[100,100],[0,100]], dtype=np.float32),
-            x=0, y=0, w=100, h=100
+            corners=np.array(
+                [[0, 0], [100, 0], [100, 100], [0, 100]], dtype=np.float32
+            ),
+            x=0,
+            y=0,
+            w=100,
+            h=100,
+            confidence=1.0,
         )
         fake_result = PipelineResult(
             card_id="test_card",
@@ -76,6 +88,7 @@ class TestPipelineConcurrency:
     def test_thread_safe_result_access(self, pipeline, dummy_frame):
         """Accès concurrent à _result sans deadlock."""
         import threading
+
         errors = []
 
         def reader():

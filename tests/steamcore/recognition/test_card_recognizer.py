@@ -8,6 +8,7 @@ Hypothèses :
 - reload() recharge les templates
 - hint_id filtre les templates testés
 """
+
 from __future__ import annotations
 import numpy as np
 import cv2
@@ -21,14 +22,17 @@ from steamcore.recognition.card_recognizer import CardRecognizer, RecognitionRes
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_gray_pattern(size: int = 400, seed: int = 42) -> np.ndarray:
     """Génère une image synthétique reproductible avec des features ORB détectables."""
     rng = np.random.default_rng(seed)
     img = rng.integers(0, 256, (size, size), dtype=np.uint8)
     # Ajouter des cercles pour des keypoints stables
     for i in range(20):
-        cx, cy = int(rng.integers(50, size - 50, 2))
-        cv2.circle(img, (cx, cy), int(rng.integers(5, 20)), int(rng.integers(50, 200)), -1)
+        cx, cy = rng.integers(50, size - 50, 2).tolist()
+        cv2.circle(
+            img, (cx, cy), int(rng.integers(5, 20)), int(rng.integers(50, 200)), -1
+        )
     return img
 
 
@@ -39,6 +43,7 @@ def _make_bgr(gray: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def empty_platest(tmp_path) -> Path:
@@ -75,6 +80,7 @@ def recognizer_single(single_card_platest) -> tuple[CardRecognizer, str]:
 # Tests — PLATEST vide
 # ---------------------------------------------------------------------------
 
+
 class TestEmptyPlatest:
     def test_no_templates_loaded(self, recognizer_empty):
         assert len(recognizer_empty.card_ids) == 0
@@ -94,12 +100,15 @@ class TestEmptyPlatest:
 # Tests — CardRecognizer avec un template
 # ---------------------------------------------------------------------------
 
+
 class TestSingleCard:
     def test_card_loaded(self, recognizer_single):
         rec, card_id = recognizer_single
         assert card_id in rec.card_ids
 
-    def test_recognize_same_image_returns_result(self, recognizer_single, single_card_platest):
+    def test_recognize_same_image_returns_result(
+        self, recognizer_single, single_card_platest
+    ):
         """Reconnaître l'image source elle-même doit retourner un match."""
         rec, card_id = recognizer_single
         platest, _ = single_card_platest
@@ -150,10 +159,14 @@ class TestSingleCard:
 # Tests — reload()
 # ---------------------------------------------------------------------------
 
+
 class TestReload:
-    def test_reload_empty_clears_templates(self, recognizer_single, single_card_platest):
+    def test_reload_empty_clears_templates(
+        self, recognizer_single, single_card_platest
+    ):
         """Après suppression du dossier, reload() vide les templates."""
         import shutil
+
         rec, card_id = recognizer_single
         platest, _ = single_card_platest
         assert card_id in rec.card_ids
@@ -178,10 +191,15 @@ class TestReload:
 # Tests — RecognitionResult dataclass
 # ---------------------------------------------------------------------------
 
+
 class TestRecognitionResult:
     def test_dataclass_fields(self):
         r = RecognitionResult(
-            card_id="plate_x", label="X", score=0.85, matches=12, matched_img="source.jpg"
+            card_id="plate_x",
+            label="X",
+            score=0.85,
+            matches=12,
+            matched_img="source.jpg",
         )
         assert r.card_id == "plate_x"
         assert r.label == "X"

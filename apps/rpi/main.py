@@ -16,6 +16,7 @@ Piloté par config/features.yaml
 ║  → retour IDLE après idle_after_s                    ║
 ╚══════════════════════════════════════════════════════╝
 """
+
 from __future__ import annotations
 import logging
 import logging.handlers
@@ -24,6 +25,8 @@ import signal
 import sys
 import time
 import threading
+import socketserver
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from enum import Enum, auto
 
@@ -33,27 +36,25 @@ import cv2
 import yaml
 from picamera2 import Picamera2
 
-from steamcore.audio                       import AudioPlayer
-from steamcore.video_player                import VideoPlayer
-from steamcore.rules                       import RuleEngine
-from steamcore.udp                         import send_event as udp_send_raw, HeartbeatThread, UDPListener
-from steamcore.recognition.fast_detector   import FastDetector
-from steamcore.recognition.card_detector   import CardDetector
+from steamcore.audio import AudioPlayer
+from steamcore.video_player import VideoPlayer
+from steamcore.rules import RuleEngine
+from steamcore.udp import send_event as udp_send_raw, HeartbeatThread, UDPListener
+from steamcore.recognition.fast_detector import FastDetector
+from steamcore.recognition.card_detector import CardDetector
 from steamcore.recognition.card_recognizer import CardRecognizer
-from monitor.ws_bridge                     import start_in_thread as start_ws, push_event as _push_event_raw
-from monitor.rule_api                      import start_in_thread as start_rule_api
+from monitor.ws_bridge import start_in_thread as start_ws, push_event as _push_event_raw
+from monitor.rule_api import start_in_thread as start_rule_api
 
 CONFIG_FILE = "config/features.yaml"
-LOG_FILE    = "logs/steam_vision.log"
+LOG_FILE = "logs/steam_vision.log"
 
 
 # ── MJPEG stream (optionnel, thread daemon) ────────────────────────
-import socketserver
-from http.server import BaseHTTPRequestHandler, HTTPServer
+_stream_frame: bytes | None = None
+_stream_lock = threading.Lock()
+_stream_last_update: float = 0.0
 
-_stream_frame:       bytes | None = None
-_stream_lock                      = threading.Lock()
-_stream_last_update: float        = 0.0
 
 def _update_stream_frame(frame, fps_limit: float = 20.0) -> None:
     """Encode la frame courante en JPEG et la partage avec le serveur MJPEG.
@@ -64,7 +65,7 @@ def _update_stream_frame(frame, fps_limit: float = 20.0) -> None:
         return
     _stream_last_update = now
     try:
-        ok, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
         if ok:
             with _stream_lock:
                 _stream_frame = buf.tobytes()
@@ -81,29 +82,31 @@ def _start_mjpeg_server(port: int = 5050) -> None:
     Si ça plante, le pipeline principal continue sans le stream."""
 
     class Handler(BaseHTTPRequestHandler):
-        def log_message(self, *args): pass  # silence logs HTTP
+        def log_message(self, *args):
+            pass  # silence logs HTTP
 
         def do_GET(self):
-            if self.path in ('/', '/view'):
+            if self.path in ("/", "/view"):
                 body = _VIEW_HTML
                 self.send_response(200)
-                self.send_header('Content-Type', 'text/html; charset=utf-8')
-                self.send_header('Content-Length', str(len(body)))
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
-            elif self.path == '/api/status':
+            elif self.path == "/api/status":
                 with _view_lock:
                     data = dict(_view_status)
                 body = json.dumps(data).encode()
                 self.send_response(200)
-                self.send_header('Content-Type', 'application/json')
-                self.send_header('Content-Length', str(len(body)))
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
-            elif self.path == '/stream':
+            elif self.path == "/stream":
                 self.send_response(200)
-                self.send_header('Content-Type',
-                                 'multipart/x-mixed-replace; boundary=frame')
+                self.send_header(
+                    "Content-Type", "multipart/x-mixed-replace; boundary=frame"
+                )
                 self.end_headers()
                 try:
                     while True:
@@ -113,10 +116,11 @@ def _start_mjpeg_server(port: int = 5050) -> None:
                             time.sleep(0.05)
                             continue
                         self.wfile.write(
-                            b'--frame\r\nContent-Type: image/jpeg\r\n\r\n'
-                            + data + b'\r\n'
+                            b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
+                            + data
+                            + b"\r\n"
                         )
-                        time.sleep(0.05)   # ~20 fps côté client
+                        time.sleep(0.05)  # ~20 fps côté client
                 except Exception:
                     pass
             else:
@@ -125,7 +129,7 @@ def _start_mjpeg_server(port: int = 5050) -> None:
 
     def _run():
         try:
-            srv = _ThreadedHTTPServer(('0.0.0.0', port), Handler)
+            srv = _ThreadedHTTPServer(("0.0.0.0", port), Handler)
             log.info(f"[stream] MJPEG  →  http://0.0.0.0:{port}/stream")
             srv.serve_forever()
         except Exception as e:
@@ -136,7 +140,10 @@ def _start_mjpeg_server(port: int = 5050) -> None:
 
 # ── View status (partagé pipeline → HTTP) ─────────────────────────
 _view_status: dict = {
-    "fsm": "IDLE", "card_id": None, "card_label": None, "hold_pct": 0,
+    "fsm": "IDLE",
+    "card_id": None,
+    "card_label": None,
+    "hold_pct": 0,
 }
 _view_lock = threading.Lock()
 
@@ -150,12 +157,12 @@ def push_event(event: dict) -> None:
         with _view_lock:
             _view_status["fsm"] = st
             if st == "IDLE":
-                _view_status["card_id"]    = None
+                _view_status["card_id"] = None
                 _view_status["card_label"] = None
-                _view_status["hold_pct"]   = 0
+                _view_status["hold_pct"] = 0
     elif t == "card_detected":
         with _view_lock:
-            _view_status["card_id"]    = event.get("card_id")
+            _view_status["card_id"] = event.get("card_id")
             _view_status["card_label"] = event.get("label")
     elif t == "hold":
         with _view_lock:
@@ -237,8 +244,8 @@ function handle(ev){
 }
 function connect(){
   const ws=new WebSocket('ws://'+location.hostname+':8889');
-  ws.onopen=()=>{wsEl.textContent='● connect\xe9';wsEl.className='ok';};
-  ws.onclose=()=>{wsEl.textContent='○ reconnexion\xe2\x80\xa6';wsEl.className='err';setTimeout(connect,3000);};
+  ws.onopen=()=>{wsEl.textContent='\xe2\x97\x8f connect\xe9';wsEl.className='ok';};
+  ws.onclose=()=>{wsEl.textContent='\xe2\x97\x8b reconnexion\xe2\x80\xa6';wsEl.className='err';setTimeout(connect,3000);};
   ws.onerror=()=>ws.close();
   ws.onmessage=e=>{try{handle(JSON.parse(e.data));}catch(_){}};
 }
@@ -256,15 +263,18 @@ connect();
 
 # ── Logging ────────────────────────────────────────────────────────
 
+
 def setup_logging():
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
     handler = logging.handlers.RotatingFileHandler(
         LOG_FILE, maxBytes=2 * 1024 * 1024, backupCount=3, encoding="utf-8"
     )
-    handler.setFormatter(logging.Formatter(
-        "%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
-    ))
+    handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+        )
+    )
     console = logging.StreamHandler(sys.stdout)
     console.setFormatter(logging.Formatter("%(message)s"))
     logging.basicConfig(level=logging.INFO, handlers=[handler, console])
@@ -274,6 +284,7 @@ log = logging.getLogger("steam")
 
 
 # ── Config ─────────────────────────────────────────────────────────
+
 
 def load_config():
     p = Path(CONFIG_FILE)
@@ -286,6 +297,7 @@ def load_config():
 
 # ── Boot checks ────────────────────────────────────────────────────
 
+
 def boot_checks():
     """Vérifie les dépendances critiques au démarrage. Abort si manquant."""
     errors = []
@@ -293,8 +305,10 @@ def boot_checks():
     # Lecteur vidéo
     players = ["mpv", "ffplay", "vlc"]
     if not any(shutil.which(p) for p in players):
-        errors.append("Aucun lecteur vidéo trouvé (mpv / ffplay / vlc). "
-                      "Installer avec : sudo apt install mpv")
+        errors.append(
+            "Aucun lecteur vidéo trouvé (mpv / ffplay / vlc). "
+            "Installer avec : sudo apt install mpv"
+        )
     else:
         found = next(p for p in players if shutil.which(p))
         log.info(f"[boot] Lecteur vidéo : {found} OK")
@@ -312,7 +326,9 @@ def boot_checks():
 
     # config/rules.yaml
     if not Path("config/rules.yaml").exists():
-        log.warning("[boot] WARN : config/rules.yaml absent — aucune action ne sera déclenchée")
+        log.warning(
+            "[boot] WARN : config/rules.yaml absent — aucune action ne sera déclenchée"
+        )
 
     if errors:
         for e in errors:
@@ -322,11 +338,12 @@ def boot_checks():
 
 
 class State(Enum):
-    IDLE    = auto()
-    STANDBY = auto()   # vidéo en cours — aucune détection
+    IDLE = auto()
+    STANDBY = auto()  # vidéo en cours — aucune détection
 
 
 # ── Helpers ───────────────────────────────────────────────────────
+
 
 def udp_send(msg, ip, port):
     """Envoie UDP + pousse l'event sur le monitor WS."""
@@ -342,15 +359,13 @@ def run_actions(cfg, rule_engine, label_or_result, audio, video, card_id=None):
     Dispatche les actions d'une règle (carte ou person).
     label_or_result : RecognitionResult (mode card) ou str (mode person).
     """
-    lox_ip   = cfg.get("loxone_ip",   "192.168.1.50")
+    lox_ip = cfg.get("loxone_ip", "192.168.1.50")
     lox_port = cfg.get("loxone_port", 7777)
 
     if hasattr(label_or_result, "card_id"):
-        cid   = label_or_result.card_id
-        label = label_or_result.label
+        cid = label_or_result.card_id
     else:
-        cid   = label_or_result
-        label = label_or_result
+        cid = label_or_result
 
     actions = rule_engine.get_actions(cid)
     if not actions:
@@ -360,19 +375,25 @@ def run_actions(cfg, rule_engine, label_or_result, audio, video, card_id=None):
 
     for action in actions:
         if action.type == "audio" and cfg.get("enable_audio", True):
-            threading.Thread(target=audio.play_random,
-                             args=(action.subdir,), daemon=True).start()
+            threading.Thread(
+                target=audio.play_random, args=(action.subdir,), daemon=True
+            ).start()
             push_event({"type": "audio", "card": cid, "subdir": action.subdir})
 
         elif action.type == "video" and cfg.get("enable_video", True):
-            threading.Thread(target=video.play_random,
-                             args=(action.subdir,), daemon=True).start()
+            threading.Thread(
+                target=video.play_random, args=(action.subdir,), daemon=True
+            ).start()
             push_event({"type": "video", "card": cid, "subdir": action.subdir})
 
         elif action.type == "image" and cfg.get("enable_video", True):
             from steamcore.image_player import ImagePlayer
-            threading.Thread(target=ImagePlayer("assets/img").show_random,
-                             args=(action.subdir,), daemon=True).start()
+
+            threading.Thread(
+                target=ImagePlayer("assets/img").show_random,
+                args=(action.subdir,),
+                daemon=True,
+            ).start()
             push_event({"type": "image", "card": cid, "subdir": action.subdir})
 
         elif action.type == "udp":
@@ -384,46 +405,54 @@ def run_actions(cfg, rule_engine, label_or_result, audio, video, card_id=None):
 # MODE CARD  —  L1→L2→L3, hold 2s, vidéo
 # ══════════════════════════════════════════════════════════════════
 
+
 def run_card_mode(cfg, cam, rule_engine, audio, video):
-    card_hold_ms    = cfg.get("card_hold_ms",          1000)
-    idle_after_s    = cfg.get("idle_after_s",           3.0)
-    card_min_area   = cfg.get("card_min_area",         4000)
-    card_min_match  = cfg.get("card_min_matches",        12)
-    card_threshold  = cfg.get("card_score_threshold",  0.20)
-    consec_required = cfg.get("card_consec_frames",       5)
+    card_hold_ms = cfg.get("card_hold_ms", 1000)
+    idle_after_s = cfg.get("idle_after_s", 3.0)
+    card_min_area = cfg.get("card_min_area", 4000)
+    card_min_match = cfg.get("card_min_matches", 12)
+    card_threshold = cfg.get("card_score_threshold", 0.20)
+    consec_required = cfg.get("card_consec_frames", 5)
 
     fast_detector = FastDetector(min_area=card_min_area)
     card_detector = CardDetector()
-    recognizer    = CardRecognizer("PLATEST",
-                                   min_matches=card_min_match,
-                                   threshold=card_threshold)
+    recognizer = CardRecognizer(
+        "PLATEST", min_matches=card_min_match, threshold=card_threshold
+    )
 
-    state          = State.IDLE
+    state = State.IDLE
     last_triggered = 0.0
-    hold_card_id   = None
-    hold_start     = 0.0
+    hold_card_id = None
+    hold_start = 0.0
     consec_card_id = None
-    consec_count   = 0
-    frame_count    = 0
+    consec_count = 0
+    frame_count = 0
 
-    log.info("[card] Pipeline card — IDLE (hold=" + str(card_hold_ms) +
-             "ms, consec=" + str(consec_required) + ")")
+    log.info(
+        "[card] Pipeline card — IDLE (hold="
+        + str(card_hold_ms)
+        + "ms, consec="
+        + str(consec_required)
+        + ")"
+    )
     push_event({"type": "state", "state": "IDLE"})
 
     running = True
+
     def _stop(s, f):
         nonlocal running
         running = False
         log.info("[stop] Arret propre...")
-    signal.signal(signal.SIGINT,  _stop)
+
+    signal.signal(signal.SIGINT, _stop)
     signal.signal(signal.SIGTERM, _stop)
 
     def _reset_detection():
         nonlocal hold_card_id, hold_start, consec_card_id, consec_count
-        hold_card_id   = None
-        hold_start     = 0.0
+        hold_card_id = None
+        hold_start = 0.0
         consec_card_id = None
-        consec_count   = 0
+        consec_count = 0
 
     while running:
         frame = cam.capture_array()
@@ -436,7 +465,7 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
         now = time.time()
 
         if state == State.STANDBY:
-            elapsed    = now - last_triggered
+            elapsed = now - last_triggered
             video_done = not video.is_playing()
             if video_done and elapsed >= idle_after_s:
                 state = State.IDLE
@@ -451,7 +480,7 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
                 _reset_detection()
             continue
 
-        roi    = quad.crop(frame)
+        roi = quad.crop(frame)
         region = card_detector.detect(roi)
         if region is None:
             if consec_card_id is not None:
@@ -466,9 +495,9 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
 
         if result.card_id != consec_card_id:
             consec_card_id = result.card_id
-            consec_count   = 1
-            hold_card_id   = None
-            hold_start     = 0.0
+            consec_count = 1
+            hold_card_id = None
+            hold_start = 0.0
             continue
 
         consec_count += 1
@@ -477,32 +506,52 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
 
         if hold_card_id is None:
             hold_card_id = result.card_id
-            hold_start   = now
-            push_event({"type": "card_detected",
-                        "card_id": result.card_id,
-                        "label":   result.label,
-                        "score":   round(result.score, 3)})
-            log.info("[card] confirmée (" + str(consec_required) + "f) : " +
-                     result.label + "  score=" + str(round(result.score, 3)))
+            hold_start = now
+            push_event(
+                {
+                    "type": "card_detected",
+                    "card_id": result.card_id,
+                    "label": result.label,
+                    "score": round(result.score, 3),
+                }
+            )
+            log.info(
+                "[card] confirmée ("
+                + str(consec_required)
+                + "f) : "
+                + result.label
+                + "  score="
+                + str(round(result.score, 3))
+            )
 
         held_ms = (now - hold_start) * 1000
-        pct     = min(100, int(held_ms / card_hold_ms * 100))
-        push_event({"type": "hold",
-                    "card_id":   result.card_id,
-                    "label":     result.label,
-                    "pct":       pct,
-                    "held_ms":   int(held_ms),
-                    "target_ms": card_hold_ms})
+        pct = min(100, int(held_ms / card_hold_ms * 100))
+        push_event(
+            {
+                "type": "hold",
+                "card_id": result.card_id,
+                "label": result.label,
+                "pct": pct,
+                "held_ms": int(held_ms),
+                "target_ms": card_hold_ms,
+            }
+        )
 
         if held_ms < card_hold_ms:
             continue
 
-        log.info("[TRIGGER] " + result.label +
-                 "  score=" + str(round(result.score, 3)) +
-                 "  hold=" + str(int(held_ms)) + "ms")
+        log.info(
+            "[TRIGGER] "
+            + result.label
+            + "  score="
+            + str(round(result.score, 3))
+            + "  hold="
+            + str(int(held_ms))
+            + "ms"
+        )
         push_event({"type": "state", "state": "STANDBY"})
         run_actions(cfg, rule_engine, result, audio, video)
-        state          = State.STANDBY
+        state = State.STANDBY
         last_triggered = now
         _reset_detection()
         log.info("[state] -> STANDBY (" + str(idle_after_s) + "s)")
@@ -514,39 +563,42 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
 # MODE PERSON  —  YOLO + audio seulement
 # ══════════════════════════════════════════════════════════════════
 
-def run_person_mode(cfg, cam, rule_engine, audio, video):
-    from steamcore.detector       import YOLODetector
-    from steamcore.person_tracker import PersonTracker, PersonState
 
-    person_duration = cfg.get("person_duration",    2.0)
-    persist         = cfg.get("persist_after_loss", 5.0)
-    idle_after_s    = cfg.get("idle_after_s",       3.0)
+def run_person_mode(cfg, cam, rule_engine, audio, video):
+    from steamcore.detector import YOLODetector
+    from steamcore.person_tracker import PersonTracker
+
+    person_duration = cfg.get("person_duration", 2.0)
+    persist = cfg.get("persist_after_loss", 5.0)
+    idle_after_s = cfg.get("idle_after_s", 3.0)
 
     detector = YOLODetector(
-        model_path = cfg.get("yolo_model", "yolov8n.pt"),
-        imgsz      = cfg.get("yolo_imgsz", 320),
-        conf       = cfg.get("yolo_conf",  0.5),
+        model_path=cfg.get("yolo_model", "yolov8n.pt"),
+        imgsz=cfg.get("yolo_imgsz", 320),
+        conf=cfg.get("yolo_conf", 0.5),
     )
     tracker = PersonTracker(
-        person_duration    = person_duration,
-        persist_after_loss = persist,
-        grace_frames       = 15,
+        person_duration=person_duration,
+        persist_after_loss=persist,
+        grace_frames=15,
     )
 
-    state          = State.IDLE
+    state = State.IDLE
     last_triggered = 0.0
-    last_count     = 0.0
-    frame_count    = 0
+    last_count = 0.0
+    frame_count = 0
 
     log.info("[person] Pipeline person — IDLE (duration=" + str(person_duration) + "s)")
     push_event({"type": "state", "state": "IDLE"})
 
     running = True
+
     def _stop(s, f):
         nonlocal running
         running = False
         log.info("[stop] Arret propre...")
-    signal.signal(signal.SIGINT,  _stop)
+
+    signal.signal(signal.SIGINT, _stop)
     signal.signal(signal.SIGTERM, _stop)
 
     while running:
@@ -575,11 +627,14 @@ def run_person_mode(cfg, cam, rule_engine, audio, video):
             last_count = now
 
         if ts.ready_for_inspect and state == State.IDLE:
-            log.info("[person] Joueur détecté depuis " +
-                     str(round(ts.presence_elapsed, 1)) + "s -> TRIGGER")
+            log.info(
+                "[person] Joueur détecté depuis "
+                + str(round(ts.presence_elapsed, 1))
+                + "s -> TRIGGER"
+            )
             push_event({"type": "state", "state": "STANDBY"})
             run_actions(cfg, rule_engine, "person", audio, video)
-            state          = State.STANDBY
+            state = State.STANDBY
             last_triggered = now
             log.info("[state] -> STANDBY (" + str(idle_after_s) + "s)")
 
@@ -590,19 +645,20 @@ def run_person_mode(cfg, cam, rule_engine, audio, video):
 # MAIN
 # ══════════════════════════════════════════════════════════════════
 
+
 def main():
     setup_logging()
-    boot_checks()   # ← vérifie mpv, PLATEST, rules.yaml — abort si critique
+    boot_checks()  # ← vérifie mpv, PLATEST, rules.yaml — abort si critique
 
     cfg = load_config()
 
     pipeline_mode = cfg.get("pipeline_mode", "card")
-    monitor_on    = cfg.get("enable_monitor",   True)
-    rule_api_on   = cfg.get("enable_rule_api",  True)
-    heartbeat_on  = cfg.get("enable_heartbeat", True)
-    listen_port   = cfg.get("udp_listen_port",  8888)
-    stream_on     = cfg.get("enable_stream",    True)
-    stream_port   = cfg.get("stream_port",      5050)
+    monitor_on = cfg.get("enable_monitor", True)
+    rule_api_on = cfg.get("enable_rule_api", True)
+    heartbeat_on = cfg.get("enable_heartbeat", True)
+    listen_port = cfg.get("udp_listen_port", 8888)
+    stream_on = cfg.get("enable_stream", True)
+    stream_port = cfg.get("stream_port", 5050)
 
     log.info("=" * 55)
     log.info("  S.T.E.A.M Vision — STYX  |  Pi 5")
@@ -613,12 +669,18 @@ def main():
     log.info("  Idle after  : " + str(cfg.get("idle_after_s", 3.0)) + "s")
     log.info("  Monitor WS  : " + ("ON :8889" if monitor_on else "OFF"))
     log.info("  Rule API    : " + ("ON :8890" if rule_api_on else "OFF"))
-    log.info("  Stream MJPEG: " + (f"ON  http://0.0.0.0:{stream_port}/stream" if stream_on else "OFF"))
-    log.info("  View page   : " + (f"ON  http://0.0.0.0:{stream_port}/view"   if stream_on else "OFF"))
+    log.info(
+        "  Stream MJPEG: "
+        + (f"ON  http://0.0.0.0:{stream_port}/stream" if stream_on else "OFF")
+    )
+    log.info(
+        "  View page   : "
+        + (f"ON  http://0.0.0.0:{stream_port}/view" if stream_on else "OFF")
+    )
 
     rule_engine = RuleEngine("config/rules.yaml")
-    audio       = AudioPlayer("assets/audio")
-    video       = VideoPlayer("assets/video")
+    audio = AudioPlayer("assets/audio")
+    video = VideoPlayer("assets/video")
 
     if monitor_on:
         start_ws()
@@ -629,17 +691,23 @@ def main():
     if heartbeat_on:
         HeartbeatThread(interval=5.0).start()
 
-    UDPListener(port=listen_port, on_message=lambda msg, addr: (
-        log.info("[UDP RX] " + addr[0] + " -> " + msg),
-        push_event({"type": "udp_rx", "msg": msg, "from": addr[0]})
-    )).start()
+    UDPListener(
+        port=listen_port,
+        on_message=lambda msg, addr: (
+            log.info("[UDP RX] " + addr[0] + " -> " + msg),
+            push_event({"type": "udp_rx", "msg": msg, "from": addr[0]}),
+        ),
+    ).start()
 
     cam = Picamera2()
-    cam.configure(cam.create_preview_configuration(
-        main={"format": "RGB888",
-              "size": (cfg.get("camera_width",  1280),
-                       cfg.get("camera_height", 720))}
-    ))
+    cam.configure(
+        cam.create_preview_configuration(
+            main={
+                "format": "RGB888",
+                "size": (cfg.get("camera_width", 1280), cfg.get("camera_height", 720)),
+            }
+        )
+    )
     cam.start()
     log.info("[init] Camera OK")
 
@@ -658,6 +726,6 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         log.info("[main] Interruption clavier — arrêt propre.")
-    except Exception as e:
+    except Exception:
         logging.exception("[main] CRASH NON GÉRÉ — voir logs/steam_vision.log")
         sys.exit(1)

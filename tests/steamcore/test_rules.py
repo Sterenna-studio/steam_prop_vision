@@ -2,6 +2,7 @@
 tests/steamcore/test_rules.py
 Tests unitaires pour RuleEngine et validate_rules_schema.
 """
+
 import pytest
 import time
 from pathlib import Path
@@ -50,13 +51,24 @@ def engine(rules_yaml) -> RuleEngine:
 # Tests validate_rules_schema
 # ---------------------------------------------------------------------------
 
+
 class TestValidateSchema:
     def test_valid_schema_passes(self):
         raw = {
-            "default": {"enabled": False, "cooldown": 10, "min_duration": 0, "actions": []},
+            "default": {
+                "enabled": False,
+                "cooldown": 10,
+                "min_duration": 0,
+                "actions": [],
+            },
             "rules": {
-                "plate_x": {"enabled": True, "cooldown": 5.0, "min_duration": 0, "actions": [{"type": "udp", "message": "X"}]}
-            }
+                "plate_x": {
+                    "enabled": True,
+                    "cooldown": 5.0,
+                    "min_duration": 0,
+                    "actions": [{"type": "udp", "message": "X"}],
+                }
+            },
         }
         validate_rules_schema(raw)  # ne doit pas lever
 
@@ -87,6 +99,7 @@ class TestValidateSchema:
 # ---------------------------------------------------------------------------
 # Tests RuleEngine
 # ---------------------------------------------------------------------------
+
 
 class TestRuleEngine:
     def test_loads_rules(self, engine):
@@ -120,8 +133,7 @@ class TestRuleEngine:
         original_rules = dict(engine._rules)
         # Écrire du YAML invalide
         rules_yaml.write_text(
-            "rules:\n  bad_entry:\n    enabled: 'not_a_bool'\n",
-            encoding="utf-8"
+            "rules:\n  bad_entry:\n    enabled: 'not_a_bool'\n", encoding="utf-8"
         )
         engine.reload()
         # Les règles doivent être inchangées
