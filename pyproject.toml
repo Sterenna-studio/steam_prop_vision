@@ -4,7 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "steam-prop-vision"
-version = "0.1.0"
+version = "2.1.0"
 
 [tool.setuptools.packages.find]
 where = ["."]
+
+[tool.ruff]
+exclude = ["legacy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
