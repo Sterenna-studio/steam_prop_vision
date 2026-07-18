@@ -45,6 +45,18 @@ pip install -r requirements_rpi.txt
 > ```bash
 > python -c "import cv2; cv2.SIFT_create(); print('SIFT OK')"
 > ```
+> ⚠️ La validation QR de flux (voir README.md) nécessite le paquet système
+> `libzbar0` en plus de `pyzbar` (déjà dans `requirements_rpi.txt`) :
+> ```bash
+> sudo apt install libzbar0
+> python -c "from pyzbar.pyzbar import decode; print('pyzbar OK')"
+> ```
+> Sans `libzbar0`, le pipeline se rabat sur `cv2.QRCodeDetector`, moins fiable
+> (voir [DEPENDENCIES.md](DEPENDENCIES.md)).
+>
+> `scripts/linux/install.sh` installe déjà toutes les dépendances système
+> (dont `libzbar0`) automatiquement — préférer ce script à l'installation
+> manuelle ci-dessus quand c'est possible.
 
 ---
 

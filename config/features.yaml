@@ -26,6 +26,15 @@ enable_rule_api: true       # Rule editor HTTP   http://0.0.0.0:8890
 enable_audio: true          # lecture audio sur détection
 enable_video: true          # lecture vidéo sur détection
 enable_stream: true         # serveur MJPEG + page /view  http://0.0.0.0:5050
+enable_watchdog: true       # arrêt forcé si la boucle principale se fige (systemd relance)
+watchdog_timeout_s: 20.0    # secondes sans activité avant arrêt forcé
+
+# ── Validation GM (mode carte uniquement) ──────────────────────────
+# Identifiant de la mission active sur CETTE machine — comparé au contenu
+# d'un QR "STEAM_FLUX:<mission_id>" montré par le GM avant une session.
+# Match -> bandeau "STEAM VISION READY" sur /view. Sinon -> bandeau
+# "FLUX INATTENDU". Ne modifie jamais la config (lecture seule).
+mission_id: "flux_1"
 
 # ── Loxone / UDP ──────────────────────────────────────────────────
 loxone_ip: "192.168.1.50"

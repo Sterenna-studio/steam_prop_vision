@@ -20,8 +20,10 @@ Piloté par config/features.yaml
 from __future__ import annotations
 import logging
 import logging.handlers
+import os
 import shutil
 import signal
+import subprocess
 import sys
 import time
 import threading
@@ -46,6 +48,14 @@ from steamcore.recognition.card_recognizer import CardRecognizer
 from monitor.ws_bridge import start_in_thread as start_ws, push_event as _push_event_raw
 from monitor.rule_api import start_in_thread as start_rule_api
 
+try:
+    from pyzbar.pyzbar import decode as _zbar_decode
+
+    _QR_BACKEND = "zbar"
+except ImportError:
+    _zbar_decode = None
+    _QR_BACKEND = "cv2"
+
 CONFIG_FILE = "config/features.yaml"
 LOG_FILE = "logs/steam_vision.log"
 
@@ -53,6 +63,29 @@ LOG_FILE = "logs/steam_vision.log"
 # caméra confirme que la chaîne caméra->L1->L2->L3->WebSocket fonctionne, via
 # un bandeau dédié sur /view — sans déclencher UDP Loxone, vidéo ni audio.
 READY_CHECK_CARD_ID = "plate_ready_check"
+
+# QR de validation de flux/mission. Format attendu : "STEAM_FLUX:<mission_id>"
+# (ex: STEAM_FLUX:flux_1). Comparé à cfg["mission_id"] — lecture seule, ne
+# modifie jamais la config active.
+#
+# Décodage : pyzbar/ZBar en priorité (pip install pyzbar + apt install
+# libzbar0). cv2.QRCodeDetector (natif, sans dépendance) est utilisé en
+# repli, mais s'est montré peu fiable en pratique : il échoue de façon
+# reproductible sur certains QR pourtant valides (ex. contenu se terminant
+# par un chiffre impair dans nos tests) — voir DEPENDENCIES.md. À n'utiliser
+# que si pyzbar/libzbar0 ne peuvent pas être installés.
+QR_FLUX_PREFIX = "STEAM_FLUX:"
+QR_CHECK_EVERY = 5  # ne scanne le QR qu'une frame sur N (coût CPU)
+QR_REPEAT_COOLDOWN = 3.0  # s avant de repousser le même event pour le même QR
+
+
+def _decode_qr(frame, cv2_detector) -> str | None:
+    """Décode un QR dans la frame (pyzbar si dispo, sinon cv2 en repli)."""
+    if _zbar_decode is not None:
+        results = _zbar_decode(frame)
+        return results[0].data.decode("utf-8", errors="ignore") if results else None
+    data, _, _ = cv2_detector.detectAndDecode(frame)
+    return data or None
 
 
 # ── MJPEG stream (optionnel, thread daemon) ────────────────────────
@@ -153,6 +186,35 @@ _view_status: dict = {
 _view_lock = threading.Lock()
 
 
+# ── Watchdog anti-freeze ─────────────────────────────────────────────
+# systemd (Restart=on-failure) ne relance que si le PROCESS meurt. Si la
+# boucle principale se fige (ex: appel caméra/IPC bloqué) sans faire mourir
+# le process, rien ne le détecte. Ce watchdog force un os._exit(1) si aucune
+# itération de la boucle n'a "touché" _last_alive depuis watchdog_timeout_s
+# — systemd relance alors normalement.
+_last_alive = time.time()
+_alive_lock = threading.Lock()
+
+
+def _touch_alive() -> None:
+    global _last_alive
+    with _alive_lock:
+        _last_alive = time.time()
+
+
+def _watchdog_loop(timeout_s: float) -> None:
+    while True:
+        time.sleep(5.0)
+        with _alive_lock:
+            stale = time.time() - _last_alive
+        if stale > timeout_s:
+            log.error(
+                f"[watchdog] Boucle principale figée depuis {stale:.0f}s "
+                "-> arrêt forcé (systemd relancera)"
+            )
+            os._exit(1)
+
+
 def push_event(event: dict) -> None:
     """Transmet l'event au WebSocket ET met à jour le statut view."""
     _push_event_raw(event)
@@ -198,6 +260,10 @@ body{background:#000;color:#fff;font-family:monospace;height:100vh;display:flex;
 #ready .check{width:64px;height:64px;border-radius:50%;background:#0d2318;border:2px solid #4caf50;display:flex;align-items:center;justify-content:center;font-size:28px;color:#4caf50}
 #ready .txt{font-size:clamp(16px,2.6vw,26px);letter-spacing:.08em;color:#4caf50;font-weight:bold}
 #ready .sub{font-size:11px;color:#666;letter-spacing:.06em}
+#mismatch{position:absolute;inset:0;background:rgba(0,0,0,.85);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+#mismatch .check{width:64px;height:64px;border-radius:50%;background:#2b1710;border:2px solid #ff9800;display:flex;align-items:center;justify-content:center;font-size:28px;color:#ff9800}
+#mismatch .txt{font-size:clamp(15px,2.4vw,22px);letter-spacing:.06em;color:#ff9800;font-weight:bold}
+#mismatch .sub{font-size:12px;color:#999;letter-spacing:.04em}
 #bar{height:44px;background:rgba(0,0,0,.92);border-top:1px solid #1a1a1a;display:flex;align-items:center;padding:0 18px;gap:20px;font-size:12px}
 .badge{padding:2px 9px;border-radius:3px;font-weight:bold;letter-spacing:.08em;font-size:11px}
 #fsm-b{background:#222;color:#666}
@@ -226,6 +292,11 @@ body{background:#000;color:#fff;font-family:monospace;height:100vh;display:flex;
     <div class="txt" id="ready-txt">STEAM VISION READY</div>
     <div class="sub">CAM&Eacute;RA &middot; D&Eacute;TECTION &middot; RECONNAISSANCE &mdash; OK</div>
   </div>
+  <div id="mismatch">
+    <div class="check">&#33;</div>
+    <div class="txt">FLUX INATTENDU</div>
+    <div class="sub" id="mismatch-sub">&mdash;</div>
+  </div>
 </div>
 <div id="bar">
   <span>FSM&nbsp;<span id="fsm-b" class="badge idle">IDLE</span></span>
@@ -238,7 +309,8 @@ const fsmEl=$('fsm-b'),cardEl=$('card-d'),wsEl=$('ws-d');
 const holdEl=$('hold'),holdFill=$('hold-fill'),holdTxt=$('hold-txt');
 const sbEl=$('standby'),sbName=$('sb-name');
 const readyEl=$('ready'),readyTxt=$('ready-txt');
-let readyTimer=null;
+const mismatchEl=$('mismatch'),mismatchSub=$('mismatch-sub');
+let readyTimer=null,mismatchTimer=null;
 
 function fsm(s){
   fsmEl.textContent=s;
@@ -263,6 +335,13 @@ function handle(ev){
     readyEl.style.display='flex';
     clearTimeout(readyTimer);
     readyTimer=setTimeout(()=>{readyEl.style.display='none';},4000);
+  }else if(ev.type==='flux_mismatch'){
+    holdEl.style.display='none';
+    cardEl.textContent='\xe2\x80\x94';
+    mismatchSub.textContent='attendu '+(ev.expected||'?')+' \xe2\x80\x94 re\xc3\xa7u '+(ev.scanned||'?');
+    mismatchEl.style.display='flex';
+    clearTimeout(mismatchTimer);
+    mismatchTimer=setTimeout(()=>{mismatchEl.style.display='none';},4000);
   }
 }
 function connect(){
@@ -321,8 +400,31 @@ def load_config():
 # ── Boot checks ────────────────────────────────────────────────────
 
 
+def _kill_orphan_players():
+    """Tue les mpv/ffplay orphelins d'un crash précédent (best-effort).
+
+    Un crash brutal du process principal (SIGKILL, freeze -> watchdog) laisse
+    le sous-processus mpv/ffplay tourner indépendamment (reparenté à init) :
+    sans ce nettoyage, il continue d'afficher/boucler par-dessus la nouvelle
+    instance qui redémarre.
+    """
+    if not shutil.which("pkill"):
+        return
+    for name in ("mpv", "ffplay"):
+        try:
+            subprocess.run(
+                ["pkill", "-x", name],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception as e:
+            log.warning(f"[boot] pkill {name} : {e}")
+
+
 def boot_checks():
     """Vérifie les dépendances critiques au démarrage. Abort si manquant."""
+    _kill_orphan_players()
     errors = []
 
     # Lecteur vidéo
@@ -442,6 +544,15 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
     recognizer = CardRecognizer(
         "PLATEST", min_matches=card_min_match, threshold=card_threshold
     )
+    qr_detector = cv2.QRCodeDetector()  # utilisé seulement si pyzbar absent
+    mission_id = cfg.get("mission_id", "")
+    log.info(f"[qr] Backend décodage : {_QR_BACKEND}")
+    if _QR_BACKEND != "zbar":
+        log.warning(
+            "[qr] pyzbar/libzbar0 absent — repli sur cv2.QRCodeDetector, "
+            "moins fiable (voir DEPENDENCIES.md). "
+            "Installer : sudo apt install libzbar0 && pip install pyzbar"
+        )
 
     state = State.IDLE
     last_triggered = 0.0
@@ -450,6 +561,8 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
     consec_card_id = None
     consec_count = 0
     frame_count = 0
+    last_qr_payload = None
+    last_qr_time = 0.0
 
     log.info(
         "[card] Pipeline card — IDLE (hold="
@@ -482,6 +595,7 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
         if frame is None:
             time.sleep(0.01)
             continue
+        _touch_alive()
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         _update_stream_frame(frame)
         frame_count += 1
@@ -496,6 +610,37 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
                 log.info("[state] -> IDLE")
                 push_event({"type": "state", "state": "IDLE"})
             continue
+
+        if frame_count % QR_CHECK_EVERY == 0:
+            data = _decode_qr(frame, qr_detector)
+            if data and data.startswith(QR_FLUX_PREFIX):
+                flux_id = data[len(QR_FLUX_PREFIX) :]
+                repeat = (
+                    flux_id == last_qr_payload
+                    and (now - last_qr_time) < QR_REPEAT_COOLDOWN
+                )
+                if not repeat:
+                    last_qr_payload = flux_id
+                    last_qr_time = now
+                    if flux_id == mission_id:
+                        log.info(f"[qr] Flux valide : {flux_id}")
+                        push_event(
+                            {
+                                "type": "system_ready",
+                                "label": f"STEAM VISION READY — {flux_id.upper()}",
+                            }
+                        )
+                    else:
+                        log.warning(
+                            f"[qr] Flux inattendu : scanné={flux_id!r} attendu={mission_id!r}"
+                        )
+                        push_event(
+                            {
+                                "type": "flux_mismatch",
+                                "expected": mission_id,
+                                "scanned": flux_id,
+                            }
+                        )
 
         quad = fast_detector.detect(frame)
         if quad is None:
@@ -635,6 +780,7 @@ def run_person_mode(cfg, cam, rule_engine, audio, video):
         if frame is None:
             time.sleep(0.01)
             continue
+        _touch_alive()
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         _update_stream_frame(frame)
         frame_count += 1
@@ -688,6 +834,8 @@ def main():
     listen_port = cfg.get("udp_listen_port", 8888)
     stream_on = cfg.get("enable_stream", True)
     stream_port = cfg.get("stream_port", 5050)
+    watchdog_on = cfg.get("enable_watchdog", True)
+    watchdog_timeout_s = cfg.get("watchdog_timeout_s", 20.0)
 
     log.info("=" * 55)
     log.info("  S.T.E.A.M Vision — STYX  |  Pi 5")
@@ -706,6 +854,10 @@ def main():
         "  View page   : "
         + (f"ON  http://0.0.0.0:{stream_port}/view" if stream_on else "OFF")
     )
+    log.info(
+        "  Watchdog    : "
+        + (f"ON  timeout={watchdog_timeout_s}s" if watchdog_on else "OFF")
+    )
 
     rule_engine = RuleEngine("config/rules.yaml")
     audio = AudioPlayer("assets/audio")
@@ -719,6 +871,14 @@ def main():
         _start_mjpeg_server(port=stream_port)
     if heartbeat_on:
         HeartbeatThread(interval=5.0).start()
+    if watchdog_on:
+        _touch_alive()
+        threading.Thread(
+            target=_watchdog_loop,
+            args=(watchdog_timeout_s,),
+            daemon=True,
+            name="watchdog",
+        ).start()
 
     UDPListener(
         port=listen_port,

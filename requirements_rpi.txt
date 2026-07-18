@@ -12,3 +12,8 @@ websockets>=12.0,<17.0
 # la feature était silencieusement désactivée faute de dépendances installées
 fastapi>=0.115,<0.120
 uvicorn>=0.30,<0.35
+
+# Décodage QR (validation de flux/mission) — nécessite aussi le paquet système
+# libzbar0 : sudo apt install libzbar0. Repli automatique sur cv2 si absent,
+# mais moins fiable (voir DEPENDENCIES.md).
+pyzbar>=0.1.9,<0.2

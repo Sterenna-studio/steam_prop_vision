@@ -127,6 +127,42 @@ flowchart LR
 
 ---
 
+## Validation GM — QR de flux/mission
+
+Tourne en parallèle de L1→L2→L3 (une frame sur `QR_CHECK_EVERY=5`), pas à
+travers le pipeline ORB. Lecture seule — ne modifie jamais la config active.
+
+```mermaid
+flowchart TD
+    A([Frame IDLE, 1/5]) --> B["_decode_qr()\npyzbar/ZBar (repli cv2 si absent)"]
+    B --> C{Payload commence par\nSTEAM_FLUX: ?}
+    C -- NON --> Z[Ignoré]
+    C -- OUI --> D{flux_id =\nmission_id configuré ?}
+    D -- OUI --> E["📺 WS system_ready\n'STEAM VISION READY — FLUX_X'"]
+    D -- NON --> F["📺 WS flux_mismatch\n'FLUX INATTENDU' (attendu/reçu)"]
+```
+
+> `cv2.QRCodeDetector` (repli sans dépendance) s'est montré peu fiable en test
+> — échec reproductible sur certains QR valides. `pyzbar`/ZBar (nécessite le
+> paquet système `libzbar0`) est utilisé en priorité. Voir
+> [DEPENDENCIES.md](DEPENDENCIES.md).
+
+---
+
+## Robustesse — reprise après crash
+
+```mermaid
+flowchart LR
+    CRASH([Process meurt\nou se fige]) --> SD{Type ?}
+    SD -- "mort (exception/kill)" --> RS["systemd Restart=on-failure\nrelance en 5s"]
+    SD -- "figé (vivant mais bloqué)" --> WD["Watchdog interne\naucune _touch_alive() depuis watchdog_timeout_s"]
+    WD --> KILL["os._exit(1)"] --> RS
+    RS --> BOOT["boot_checks()\ntue les mpv/ffplay orphelins"]
+    BOOT --> IDLE([Redémarre en IDLE\npas de reprise d'état de partie])
+```
+
+---
+
 ## Communication réseau
 
 ```mermaid

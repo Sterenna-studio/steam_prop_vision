@@ -13,7 +13,7 @@ echo "    Répertoire : $REPO_DIR"
 # ── Dépendances système ────────────────────────────────────────────
 sudo apt update
 sudo apt install -y python3-venv python3-pip ffmpeg mpv \
-    python3-tk libgl1 libglib2.0-0 libsm6 libxext6 libxrender-dev
+    python3-tk libgl1 libglib2.0-0 libsm6 libxext6 libxrender-dev libzbar0
 
 # ── Virtualenv + dépendances Python ───────────────────────────────
 cd "$REPO_DIR"

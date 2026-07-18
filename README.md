@@ -114,6 +114,9 @@ paramètres :
 | `enable_monitor` | `true` | WebSocket monitor `:8889` |
 | `enable_rule_api` | `true` | Rule editor HTTP `:8890` |
 | `enable_stream` | `true` | serveur MJPEG + page `/view` `:5050` |
+| `enable_watchdog` | `true` | arrêt forcé si la boucle se fige (voir plus bas) |
+| `watchdog_timeout_s` | `20.0` | secondes sans activité avant arrêt forcé |
+| `mission_id` | `"flux_1"` | identifiant de mission comparé au QR de validation GM |
 | `loxone_ip` | `192.168.1.50` | IP de la box Loxone |
 | `yolo_model` | `yolov8n.pt` | Modèle YOLO (mode person uniquement) |
 
@@ -231,6 +234,41 @@ PLATEST/
     ├── aug_source_001.jpg  ← augmentation générée automatiquement
     └── preview_augmented.jpg  ← contact sheet de preview
 ```
+
+---
+
+## Validation GM — QR de flux/mission
+
+En plus de `plate_ready_check` (auto-test générique), un QR code imprimé permet
+de valider **quelle mission** est active sur la machine — utile si plusieurs
+installations STYX tournent des missions différentes (`flux_1`, `flux_2`...).
+
+1. Générer un QR contenant `STEAM_FLUX:<mission_id>` (ex. `STEAM_FLUX:flux_1`)
+   avec n'importe quel générateur QR — aucun outil dédié dans ce dépôt, le
+   contenu textuel suffit.
+2. Le montrer à la caméra : si `<mission_id>` correspond à `mission_id` dans
+   `config/features.yaml`, bandeau **"STEAM VISION READY — FLUX_X"** sur
+   `/view`. Sinon, bandeau **"FLUX INATTENDU"** (attendu vs reçu).
+3. Lecture seule : ne modifie jamais la configuration active, quel que soit le
+   résultat.
+
+Décodage via `pyzbar`/ZBar (voir [DEPENDENCIES.md](DEPENDENCIES.md) — le
+détecteur QR intégré à OpenCV s'est montré peu fiable en test et n'est utilisé
+qu'en repli si `pyzbar`/`libzbar0` sont absents).
+
+---
+
+## Robustesse — reprise après crash
+
+| Mécanisme | Portée |
+|---|---|
+| `Restart=on-failure` (systemd) | Relance le process en 5s s'il meurt (`deploy/steam-vision.service`) |
+| Watchdog interne (`enable_watchdog`) | Force l'arrêt (`os._exit`) si la boucle principale ne progresse plus depuis `watchdog_timeout_s` — couvre le cas où le process reste vivant mais figé (ex. appel caméra bloqué), que systemd seul ne détecte pas |
+| Nettoyage au boot (`boot_checks`) | Tue les `mpv`/`ffplay` orphelins d'un crash précédent avant de redémarrer, pour éviter qu'une vidéo reste bloquée à l'écran par-dessus la nouvelle instance |
+
+Aucun état de partie (progression, carte en cours de hold) n'est volontairement
+préservé entre un crash et le redémarrage — le pipeline repart toujours d'un
+état `IDLE` propre et redétecte normalement dès que la caméra répond.
 
 ---
 

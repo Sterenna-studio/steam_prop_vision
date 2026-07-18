@@ -30,6 +30,9 @@ ultralytics>=8.0,<9.0
 numpy>=1.26,<2.0
 PyYAML>=6.0,<7.0
 websockets>=12.0,<17.0
+fastapi>=0.115,<0.120
+uvicorn>=0.30,<0.35
+pyzbar>=0.1.9,<0.2
 ```
 
 `numpy<2.0` est volontaire : ultralytics/opencv de cette génération ont été
@@ -39,6 +42,16 @@ testé explicitement (changements ABI) avant de relever la borne.
 `picamera2` reste néanmoins piloté par **`apt`/le système** sur STYX (venv créé
 avec `--system-site-packages`, voir [`SETUP_VENV.md`](SETUP_VENV.md)) — la version
 pip n'est qu'indicative ; c'est la version fournie par Debian qui fait foi.
+
+`pyzbar` nécessite en plus le paquet système `libzbar0` (`sudo apt install
+libzbar0`, déjà ajouté à `scripts/linux/install.sh`). Sans lui, `apps/rpi/main.py`
+se rabat automatiquement sur `cv2.QRCodeDetector` — **mais ce détecteur natif
+s'est montré peu fiable en pratique** : test reproductible où il échoue à décoder
+`STEAM_FLUX:flux_1` (0/5 essais) alors qu'il décode `STEAM_FLUX:flux_2` sans
+problème (5/5), même longueur de payload, donc pas un souci de taille de QR —
+c'est une limite connue de l'implémentation OpenCV. `pyzbar`/ZBar a décodé les
+deux sans exception dans les mêmes tests. Ne pas déployer sans `libzbar0` sur une
+fonctionnalité dont le but est justement de *garantir* la fiabilité.
 
 ## Ce qui manque encore pour un figeage complet (`==`)
 
