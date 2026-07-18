@@ -24,18 +24,27 @@ Intégration pipeline :
 Usage standalone :
     python3 apps/video_player.py --card vampire
 """
+
 from __future__ import annotations
-import os, json, socket, time, subprocess, random, argparse, threading, glob
+import os
+import json
+import socket
+import time
+import subprocess
+import random
+import argparse
+import threading
+import glob
 
 import cv2
 import numpy as np
 
-VIDEO_DIR  = os.path.join(os.path.dirname(__file__), "..", "assets", "video")
+VIDEO_DIR = os.path.join(os.path.dirname(__file__), "..", "assets", "video")
 MPV_SOCKET = "/tmp/steam_mpv.sock"
-MPV_BIN    = "mpv"
-IDLE_WIN   = "steam_vision"
+MPV_BIN = "mpv"
+IDLE_WIN = "steam_vision"
 IDLE_TITLE = "Qui ose se presenter devant moi ?\nQu'avez-vous a m'offrir ?"
-FONT       = cv2.FONT_HERSHEY_SIMPLEX
+FONT = cv2.FONT_HERSHEY_SIMPLEX
 
 
 def _find_videos(card_name: str, video_dir: str = VIDEO_DIR) -> list[str]:
@@ -46,18 +55,18 @@ def _find_videos(card_name: str, video_dir: str = VIDEO_DIR) -> list[str]:
 
 
 def _make_idle_frame(w: int = 1280, h: int = 720) -> np.ndarray:
-    frame  = np.zeros((h, w, 3), dtype=np.uint8)
-    lines  = IDLE_TITLE.split("\n")
-    scale  = 1.1
-    thick  = 2
+    frame = np.zeros((h, w, 3), dtype=np.uint8)
+    lines = IDLE_TITLE.split("\n")
+    scale = 1.1
+    thick = 2
     line_h = int(cv2.getTextSize("A", FONT, scale, thick)[0][1] * 2.8)
-    y0     = (h - line_h * len(lines)) // 2 + line_h
+    y0 = (h - line_h * len(lines)) // 2 + line_h
     for i, line in enumerate(lines):
         tw = cv2.getTextSize(line, FONT, scale, thick)[0][0]
-        x  = (w - tw) // 2
-        y  = y0 + i * line_h
-        cv2.putText(frame, line, (x + 2, y + 2), FONT, scale, (80, 40, 0),   thick + 2)
-        cv2.putText(frame, line, (x,     y),     FONT, scale, (0, 180, 220), thick)
+        x = (w - tw) // 2
+        y = y0 + i * line_h
+        cv2.putText(frame, line, (x + 2, y + 2), FONT, scale, (80, 40, 0), thick + 2)
+        cv2.putText(frame, line, (x, y), FONT, scale, (0, 180, 220), thick)
     return frame
 
 
@@ -69,18 +78,18 @@ class VideoPlayer:
 
     def __init__(
         self,
-        video_dir:  str = VIDEO_DIR,
+        video_dir: str = VIDEO_DIR,
         mpv_socket: str = MPV_SOCKET,
-        win_w:      int = 1280,
-        win_h:      int = 720,
+        win_w: int = 1280,
+        win_h: int = 720,
     ):
-        self.video_dir   = video_dir
-        self.mpv_socket  = mpv_socket
+        self.video_dir = video_dir
+        self.mpv_socket = mpv_socket
         self._idle_frame = _make_idle_frame(win_w, win_h)
         self._proc: subprocess.Popen | None = None
-        self._playing    = False
-        self._running    = False
-        self._show_req   = False   # signal thread -> thread principal
+        self._playing = False
+        self._running = False
+        self._show_req = False  # signal thread -> thread principal
 
     # ── Cycle de vie (thread principal) ────────────────────────────────
 
@@ -88,8 +97,7 @@ class VideoPlayer:
         """Crée la fenêtre idle fullscreen (appeler depuis le thread principal)."""
         self._running = True
         cv2.namedWindow(IDLE_WIN, cv2.WINDOW_NORMAL)
-        cv2.setWindowProperty(IDLE_WIN, cv2.WND_PROP_FULLSCREEN,
-                              cv2.WINDOW_FULLSCREEN)
+        cv2.setWindowProperty(IDLE_WIN, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
         cv2.imshow(IDLE_WIN, self._idle_frame)
         cv2.waitKey(1)
         print("[player] idle screen actif")
@@ -104,8 +112,9 @@ class VideoPlayer:
         # Le thread _watch_end signale qu'on doit réafficher l'idle
         if self._show_req:
             self._show_req = False
-            cv2.setWindowProperty(IDLE_WIN, cv2.WND_PROP_FULLSCREEN,
-                                  cv2.WINDOW_FULLSCREEN)
+            cv2.setWindowProperty(
+                IDLE_WIN, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN
+            )
             cv2.imshow(IDLE_WIN, self._idle_frame)
         cv2.waitKey(1)
 
@@ -139,11 +148,10 @@ class VideoPlayer:
             "--keep-open=no",
             chosen,
         ]
-        self._proc = subprocess.Popen(cmd,
-                                      stdout=subprocess.DEVNULL,
-                                      stderr=subprocess.DEVNULL)
-        threading.Thread(target=self._watch_end, daemon=True,
-                         name="mpv-watch").start()
+        self._proc = subprocess.Popen(
+            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+        threading.Thread(target=self._watch_end, daemon=True, name="mpv-watch").start()
 
     @property
     def is_playing(self) -> bool:
@@ -155,8 +163,8 @@ class VideoPlayer:
         """Thread : attend la fin de mpv et signale le retour idle."""
         if self._proc:
             self._proc.wait()
-        self._playing  = False
-        self._show_req = True   # sera traité par tick() dans le thread principal
+        self._playing = False
+        self._show_req = True  # sera traité par tick() dans le thread principal
         print("[player] video terminée, retour idle")
 
     def _kill_mpv(self):
@@ -181,9 +189,10 @@ class VideoPlayer:
 
 # ── Standalone test ─────────────────────────────────────────────────────
 
+
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--card",      default="vampire")
+    p.add_argument("--card", default="vampire")
     p.add_argument("--video-dir", default=VIDEO_DIR)
     args = p.parse_args()
 
