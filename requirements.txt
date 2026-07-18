@@ -1,3 +1,7 @@
 opencv-python>=4.8,<5.0
 pillow>=10.0,<13.0
 ultralytics>=8.2.0,<9.0
+
+# monitor/rule_api.py — pour tester le rule editor / dashboard depuis le PC de dev
+fastapi>=0.115,<0.120
+uvicorn>=0.30,<0.35

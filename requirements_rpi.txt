@@ -7,3 +7,8 @@ ultralytics>=8.0,<9.0
 numpy>=1.26,<2.0
 PyYAML>=6.0,<7.0
 websockets>=12.0,<17.0
+
+# monitor/rule_api.py (enable_rule_api dans features.yaml) — manquait du fichier,
+# la feature était silencieusement désactivée faute de dépendances installées
+fastapi>=0.115,<0.120
+uvicorn>=0.30,<0.35

@@ -62,47 +62,66 @@ bash scripts/linux_run.sh --loxone 192.168.1.50 --no-monitor
 
 ## Pipeline principale — `apps/rpi/main.py`
 
-Machine à états : `IDLE → INSPECTION → TRIGGERED → IDLE`
+Machine à états : `IDLE ⇄ STANDBY` (2 états seulement — pas d'état `INSPECTION`/
+`TRIGGERED`, contrairement à des versions antérieures du projet).
 
-### Mode `card_first` (défaut, recommandé)
-
-```
-Toujours → Scan carte SIFT dans la frame
-         → Si losange trouvé ET joueur présent → TRIGGER
-```
-
-### Mode `legacy` (`card_first: false`)
+### Mode `card` (`pipeline_mode: "card"`, défaut STYX)
 
 ```
-Joueur visible 2s → INSPECTION → Scan carte → TRIGGER
+Boucle IDLE → Scan carte L1(FastDetector)→L2(CardDetector)→L3(CardRecognizer)
+            → même carte confirmée card_consec_frames images consécutives
+            → maintenue card_hold_ms → TRIGGER (actions rules.yaml)
+            → STANDBY jusqu'à fin vidéo + idle_after_s → IDLE
 ```
 
-La carte déclenchée exécute les actions définies dans `config/rules.yaml`
-(UDP Loxone, audio, vidéo).
+Pas de vérification de présence joueur (YOLO) dans ce mode — uniquement piloté
+par la détection de carte.
+
+### Mode `person` (`pipeline_mode: "person"`)
+
+```
+Boucle IDLE → YOLO détecte joueur → présence continue >= person_duration
+            → TRIGGER (audio) → STANDBY idle_after_s → IDLE
+```
+
+Indépendant du mode `card` — un seul des deux modes tourne à la fois, sélectionné
+par `pipeline_mode`.
+
+La carte/le joueur déclenché exécute les actions définies dans
+`config/rules.yaml` (UDP Loxone, audio, vidéo). Le `cooldown` et `min_duration`
+définissables par carte dans `rules.yaml` sont validés au chargement mais **ne
+sont pas actuellement appliqués** par `apps/rpi/main.py` — l'anti-répétition en
+production passe uniquement par `idle_after_s` (délai global, pas par carte).
 
 ---
 
 ## Configuration — `config/features.yaml`
 
-Tous les paramètres sont modifiables ici **sans toucher au code**.
+Tous les paramètres sont modifiables ici **sans toucher au code**. Liste
+complète et à jour dans le fichier lui-même (commenté) ; principaux
+paramètres :
 
 | Paramètre | Défaut | Description |
 |---|---|---|
-| `card_first` | `true` | Mode de détection principal |
-| `require_person` | `true` | Valider présence joueur avant trigger |
-| `person_duration` | `2.0` | Secondes de présence avant INSPECTION |
-| `persist_after_loss` | `5.0` | Persistance après disparition joueur |
-| `inspect_timeout` | `15.0` | Timeout INSPECTION en secondes |
-| `card_cooldown` | `8.0` | Cooldown après un trigger |
-| `card_min_matches` | `8` | Keypoints SIFT minimum pour valider |
-| `card_score_threshold` | `0.04` | Score ORB minimum |
-| `enable_movement_tracking` | `true` | Log déplacement joueur |
-| `enable_person_count` | `true` | Log nombre de joueurs |
-| `enable_monitor` | `true` | WebSocket monitor |
+| `pipeline_mode` | `"card"` | `"card"` ou `"person"` |
+| `card_hold_ms` | `1000` | ms de maintien de la carte avant déclenchement |
+| `idle_after_s` | `3.0` | secondes avant retour en IDLE après trigger |
+| `card_consec_frames` | `5` | frames consécutives pour confirmer la carte |
+| `person_duration` | `2.0` | secondes de présence avant déclenchement (mode person) |
+| `persist_after_loss` | `5.0` | persistance joueur après disparition (mode person) |
+| `card_min_matches` | `12` | keypoints ORB minimum pour valider |
+| `card_score_threshold` | `0.20` | score minimum ORB (0.0–1.0) |
+| `enable_monitor` | `true` | WebSocket monitor `:8889` |
+| `enable_rule_api` | `true` | Rule editor HTTP `:8890` |
+| `enable_stream` | `true` | serveur MJPEG + page `/view` `:5050` |
 | `loxone_ip` | `192.168.1.50` | IP de la box Loxone |
-| `yolo_model` | `yolov8n.pt` | Modèle YOLO |
+| `yolo_model` | `yolov8n.pt` | Modèle YOLO (mode person uniquement) |
 
-Éditer via GUI : `python tools/feature_gui.py`
+> ⚠️ `tools/feature_gui.py` édite actuellement un jeu de clés obsolète
+> (`card_first`, `require_person`, `inspect_timeout`, `card_cooldown`) qui
+> n'existe plus dans `config/features.yaml` et n'a aucun effet sur le pipeline
+> — à corriger avant de le recommander. En attendant, éditer
+> `config/features.yaml` directement (texte simple, commenté).
 
 ---
 

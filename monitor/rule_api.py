@@ -68,7 +68,15 @@ if _OK:
 
     @app.post("/rules")
     async def save_rules(request: Request):
+        from steamcore.rules import RulesSchemaError, validate_rules_schema
+
         body = await request.json()
+        try:
+            validate_rules_schema(body)
+        except RulesSchemaError as exc:
+            return JSONResponse(
+                {"status": "error", "detail": str(exc)}, status_code=400
+            )
         with open(RULES_PATH, "w", encoding="utf-8") as f:
             yaml.dump(body, f, allow_unicode=True, default_flow_style=False)
         if _engine_ref:
