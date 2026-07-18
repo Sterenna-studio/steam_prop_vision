@@ -88,6 +88,60 @@ def _decode_qr(frame, cv2_detector) -> str | None:
     return data or None
 
 
+class QRFluxChecker:
+    """Scan QR de validation de flux/mission (1 frame sur QR_CHECK_EVERY).
+
+    Lecture seule : compare le flux scanné à mission_id, ne modifie jamais la
+    config active. check() retourne l'event à pousser sur le monitor WS
+    (system_ready / flux_mismatch), ou None si rien à signaler.
+    """
+
+    def __init__(self, mission_id: str):
+        self.mission_id = mission_id
+        self._cv2_detector = cv2.QRCodeDetector()  # utilisé si pyzbar absent
+        self._last_payload: str | None = None
+        self._last_time = 0.0
+        log.info(f"[qr] Backend décodage : {_QR_BACKEND}")
+        if _QR_BACKEND != "zbar":
+            log.warning(
+                "[qr] pyzbar/libzbar0 absent — repli sur cv2.QRCodeDetector, "
+                "moins fiable (voir DEPENDENCIES.md). "
+                "Installer : sudo apt install libzbar0 && pip install pyzbar"
+            )
+
+    def check(self, frame, frame_count: int, now: float) -> dict | None:
+        if frame_count % QR_CHECK_EVERY != 0:
+            return None
+        data = _decode_qr(frame, self._cv2_detector)
+        if not data or not data.startswith(QR_FLUX_PREFIX):
+            return None
+
+        flux_id = data[len(QR_FLUX_PREFIX) :]
+        repeat = (
+            flux_id == self._last_payload
+            and (now - self._last_time) < QR_REPEAT_COOLDOWN
+        )
+        if repeat:
+            return None
+        self._last_payload = flux_id
+        self._last_time = now
+
+        if flux_id == self.mission_id:
+            log.info(f"[qr] Flux valide : {flux_id}")
+            return {
+                "type": "system_ready",
+                "label": f"STEAM VISION READY — {flux_id.upper()}",
+            }
+        log.warning(
+            f"[qr] Flux inattendu : scanné={flux_id!r} attendu={self.mission_id!r}"
+        )
+        return {
+            "type": "flux_mismatch",
+            "expected": self.mission_id,
+            "scanned": flux_id,
+        }
+
+
 # ── MJPEG stream (optionnel, thread daemon) ────────────────────────
 _stream_frame: bytes | None = None
 _stream_lock = threading.Lock()
@@ -256,14 +310,16 @@ body{background:#000;color:#fff;font-family:monospace;height:100vh;display:flex;
 #standby .icon{font-size:72px;color:#00e5cc;text-shadow:0 0 40px #00e5cc88}
 #standby .name{font-size:clamp(18px,3vw,32px);letter-spacing:.12em}
 #standby .sub{font-size:13px;color:#888;letter-spacing:.08em}
-#ready{position:absolute;inset:0;background:rgba(0,0,0,.85);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px}
-#ready .check{width:64px;height:64px;border-radius:50%;background:#0d2318;border:2px solid #4caf50;display:flex;align-items:center;justify-content:center;font-size:28px;color:#4caf50}
-#ready .txt{font-size:clamp(16px,2.6vw,26px);letter-spacing:.08em;color:#4caf50;font-weight:bold}
-#ready .sub{font-size:11px;color:#666;letter-spacing:.06em}
-#mismatch{position:absolute;inset:0;background:rgba(0,0,0,.85);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px}
-#mismatch .check{width:64px;height:64px;border-radius:50%;background:#2b1710;border:2px solid #ff9800;display:flex;align-items:center;justify-content:center;font-size:28px;color:#ff9800}
-#mismatch .txt{font-size:clamp(15px,2.4vw,22px);letter-spacing:.06em;color:#ff9800;font-weight:bold}
-#mismatch .sub{font-size:12px;color:#999;letter-spacing:.04em}
+.banner{position:absolute;inset:0;background:rgba(0,0,0,.85);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+.banner .check{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px}
+.banner .txt{font-size:clamp(15px,2.6vw,26px);letter-spacing:.06em;font-weight:bold}
+.banner .sub{font-size:11px;letter-spacing:.05em}
+.banner.ok .check{background:#0d2318;border:2px solid #4caf50;color:#4caf50}
+.banner.ok .txt{color:#4caf50}
+.banner.ok .sub{color:#666}
+.banner.warn .check{background:#2b1710;border:2px solid #ff9800;color:#ff9800}
+.banner.warn .txt{color:#ff9800}
+.banner.warn .sub{color:#999}
 #bar{height:44px;background:rgba(0,0,0,.92);border-top:1px solid #1a1a1a;display:flex;align-items:center;padding:0 18px;gap:20px;font-size:12px}
 .badge{padding:2px 9px;border-radius:3px;font-weight:bold;letter-spacing:.08em;font-size:11px}
 #fsm-b{background:#222;color:#666}
@@ -287,12 +343,12 @@ body{background:#000;color:#fff;font-family:monospace;height:100vh;display:flex;
     <div class="name" id="sb-name">\xe2\x80\x94</div>
     <div class="sub">en cours de lecture</div>
   </div>
-  <div id="ready">
+  <div id="ready" class="banner ok">
     <div class="check">&#10003;</div>
     <div class="txt" id="ready-txt">STEAM VISION READY</div>
     <div class="sub">CAM&Eacute;RA &middot; D&Eacute;TECTION &middot; RECONNAISSANCE &mdash; OK</div>
   </div>
-  <div id="mismatch">
+  <div id="mismatch" class="banner warn">
     <div class="check">&#33;</div>
     <div class="txt">FLUX INATTENDU</div>
     <div class="sub" id="mismatch-sub">&mdash;</div>
@@ -310,8 +366,12 @@ const holdEl=$('hold'),holdFill=$('hold-fill'),holdTxt=$('hold-txt');
 const sbEl=$('standby'),sbName=$('sb-name');
 const readyEl=$('ready'),readyTxt=$('ready-txt');
 const mismatchEl=$('mismatch'),mismatchSub=$('mismatch-sub');
-let readyTimer=null,mismatchTimer=null;
 
+function flash(el,ms){
+  el.style.display='flex';
+  clearTimeout(el._t);
+  el._t=setTimeout(()=>{el.style.display='none';},ms||4000);
+}
 function fsm(s){
   fsmEl.textContent=s;
   fsmEl.className='badge '+(s==='STANDBY'?'standby':'idle');
@@ -332,16 +392,12 @@ function handle(ev){
     holdEl.style.display='none';
     cardEl.textContent='\xe2\x80\x94';
     readyTxt.textContent=ev.label||'STEAM VISION READY';
-    readyEl.style.display='flex';
-    clearTimeout(readyTimer);
-    readyTimer=setTimeout(()=>{readyEl.style.display='none';},4000);
+    flash(readyEl);
   }else if(ev.type==='flux_mismatch'){
     holdEl.style.display='none';
     cardEl.textContent='\xe2\x80\x94';
     mismatchSub.textContent='attendu '+(ev.expected||'?')+' \xe2\x80\x94 re\xc3\xa7u '+(ev.scanned||'?');
-    mismatchEl.style.display='flex';
-    clearTimeout(mismatchTimer);
-    mismatchTimer=setTimeout(()=>{mismatchEl.style.display='none';},4000);
+    flash(mismatchEl);
   }
 }
 function connect(){
@@ -544,15 +600,7 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
     recognizer = CardRecognizer(
         "PLATEST", min_matches=card_min_match, threshold=card_threshold
     )
-    qr_detector = cv2.QRCodeDetector()  # utilisé seulement si pyzbar absent
-    mission_id = cfg.get("mission_id", "")
-    log.info(f"[qr] Backend décodage : {_QR_BACKEND}")
-    if _QR_BACKEND != "zbar":
-        log.warning(
-            "[qr] pyzbar/libzbar0 absent — repli sur cv2.QRCodeDetector, "
-            "moins fiable (voir DEPENDENCIES.md). "
-            "Installer : sudo apt install libzbar0 && pip install pyzbar"
-        )
+    qr_checker = QRFluxChecker(cfg.get("mission_id", ""))
 
     state = State.IDLE
     last_triggered = 0.0
@@ -561,8 +609,6 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
     consec_card_id = None
     consec_count = 0
     frame_count = 0
-    last_qr_payload = None
-    last_qr_time = 0.0
 
     log.info(
         "[card] Pipeline card — IDLE (hold="
@@ -611,36 +657,9 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
                 push_event({"type": "state", "state": "IDLE"})
             continue
 
-        if frame_count % QR_CHECK_EVERY == 0:
-            data = _decode_qr(frame, qr_detector)
-            if data and data.startswith(QR_FLUX_PREFIX):
-                flux_id = data[len(QR_FLUX_PREFIX) :]
-                repeat = (
-                    flux_id == last_qr_payload
-                    and (now - last_qr_time) < QR_REPEAT_COOLDOWN
-                )
-                if not repeat:
-                    last_qr_payload = flux_id
-                    last_qr_time = now
-                    if flux_id == mission_id:
-                        log.info(f"[qr] Flux valide : {flux_id}")
-                        push_event(
-                            {
-                                "type": "system_ready",
-                                "label": f"STEAM VISION READY — {flux_id.upper()}",
-                            }
-                        )
-                    else:
-                        log.warning(
-                            f"[qr] Flux inattendu : scanné={flux_id!r} attendu={mission_id!r}"
-                        )
-                        push_event(
-                            {
-                                "type": "flux_mismatch",
-                                "expected": mission_id,
-                                "scanned": flux_id,
-                            }
-                        )
+        qr_event = qr_checker.check(frame, frame_count, now)
+        if qr_event:
+            push_event(qr_event)
 
         quad = fast_detector.detect(frame)
         if quad is None:

@@ -11,15 +11,7 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
-
-def _find_images(directory: Path) -> list:
-    exts = {".jpg", ".jpeg", ".png", ".webp"}
-    imgs = {p for p in directory.rglob("*") if p.suffix.lower() in exts}
-    return [
-        p
-        for p in imgs
-        if not p.name.startswith(".") and not p.name.startswith("preview_")
-    ]
+from ._images import find_template_images as _find_images
 
 
 @dataclass
