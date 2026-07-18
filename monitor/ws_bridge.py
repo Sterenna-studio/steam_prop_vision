@@ -3,6 +3,7 @@ monitor/ws_bridge.py
 Serveur WebSocket leger (port 8889).
 Fix: _clients utilise set() global + difference_update() pour eviter UnboundLocalError
 """
+
 from __future__ import annotations
 import asyncio
 import json
@@ -11,6 +12,7 @@ import queue
 
 try:
     import websockets
+
     _WS_AVAILABLE = True
 except ImportError:
     _WS_AVAILABLE = False
@@ -39,6 +41,7 @@ async def _handler(websocket):
 async def _broadcaster():
     global _clients
     import time
+
     last_hb = 0.0
     while True:
         await asyncio.sleep(0.05)
@@ -74,8 +77,10 @@ def start_in_thread() -> threading.Thread | None:
     if not _WS_AVAILABLE:
         print("[ws] Monitor desactive (websockets manquant)")
         return None
+
     def run():
         asyncio.run(_serve())
+
     t = threading.Thread(target=run, daemon=True, name="ws-bridge")
     t.start()
     return t

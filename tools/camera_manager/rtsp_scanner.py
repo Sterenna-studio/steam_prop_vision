@@ -3,9 +3,9 @@
 Scan caméras locales et test de sources RTSP.
 Version silencieuse — supprime les warnings OpenCV/V4L2 sur stderr.
 """
+
 from __future__ import annotations
 import os
-import sys
 import platform
 from typing import List, Tuple
 
@@ -17,7 +17,6 @@ except ImportError:
 
 def _silence_opencv():
     """Redirige stderr pour supprimer les warnings V4L2/FFMPEG pendant le scan."""
-    import contextlib
     # Désactive les logs OpenCV
     if cv2 is not None:
         cv2.setLogLevel(0)  # 0 = SILENT

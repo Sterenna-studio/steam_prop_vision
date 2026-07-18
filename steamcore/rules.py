@@ -8,6 +8,7 @@ des actions, en tenant compte de :
   - cooldown         : délai minimum entre deux déclenchements
   - min_duration     : durée de détection continue requise (ex: 2s pour person)
 """
+
 from __future__ import annotations
 import time
 from dataclasses import dataclass, field
@@ -16,9 +17,9 @@ from typing import Any
 
 try:
     import yaml
+
     _YAML = True
 except ImportError:
-    import json
     _YAML = False
     print("[rules] WARN: pyyaml manquant, fallback JSON -> pip install pyyaml")
 
@@ -56,7 +57,9 @@ def validate_rules_schema(raw: dict) -> None:
 
 def _validate_rule_entry(label: str, cfg: Any) -> None:
     if not isinstance(cfg, dict):
-        raise RulesSchemaError(f"[{label}] doit être un mapping, reçu : {type(cfg).__name__}")
+        raise RulesSchemaError(
+            f"[{label}] doit être un mapping, reçu : {type(cfg).__name__}"
+        )
 
     # enabled
     enabled = cfg.get("enabled", True)
@@ -102,7 +105,7 @@ def _validate_rule_entry(label: str, cfg: Any) -> None:
 
 @dataclass
 class ActionDef:
-    type: str                     # audio | video | image | udp | http
+    type: str  # audio | video | image | udp | http
     subdir: str = ""
     message: str = ""
     url: str = ""
@@ -110,10 +113,10 @@ class ActionDef:
     @staticmethod
     def from_dict(d: dict) -> "ActionDef":
         return ActionDef(
-            type    = d.get("type", ""),
-            subdir  = d.get("subdir", ""),
-            message = d.get("message", ""),
-            url     = d.get("url", ""),
+            type=d.get("type", ""),
+            subdir=d.get("subdir", ""),
+            message=d.get("message", ""),
+            url=d.get("url", ""),
         )
 
 
@@ -134,7 +137,7 @@ class RuleEngine:
 
         # État runtime
         self._last_trigger: dict[str, float] = {}
-        self._first_seen:   dict[str, float] = {}   # pour min_duration
+        self._first_seen: dict[str, float] = {}  # pour min_duration
 
         self.reload()
 
@@ -157,8 +160,7 @@ class RuleEngine:
 
         self._default = self._parse_rule("__default__", default_raw)
         self._rules = {
-            label: self._parse_rule(label, cfg)
-            for label, cfg in rules_raw.items()
+            label: self._parse_rule(label, cfg) for label, cfg in rules_raw.items()
         }
         print(f"[rules] {len(self._rules)} règles chargées depuis {self.config_path}")
 
@@ -171,11 +173,11 @@ class RuleEngine:
     @staticmethod
     def _parse_rule(label: str, cfg: dict) -> LabelRule:
         return LabelRule(
-            label        = label,
-            enabled      = cfg.get("enabled", True),
-            cooldown     = float(cfg.get("cooldown", 5.0)),
-            min_duration = float(cfg.get("min_duration", 0.0)),
-            actions      = [ActionDef.from_dict(a) for a in cfg.get("actions", [])],
+            label=label,
+            enabled=cfg.get("enabled", True),
+            cooldown=float(cfg.get("cooldown", 5.0)),
+            min_duration=float(cfg.get("min_duration", 0.0)),
+            actions=[ActionDef.from_dict(a) for a in cfg.get("actions", [])],
         )
 
     # ── API principale ────────────────────────────────────────────
@@ -225,5 +227,5 @@ class RuleEngine:
 
     # ── Infos debug ───────────────────────────────────────────────
     def summary(self) -> str:
-        active = [l for l, r in self._rules.items() if r.enabled]
+        active = [label for label, r in self._rules.items() if r.enabled]
         return f"rules: {len(active)} actives / {len(self._rules)} totales"

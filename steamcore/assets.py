@@ -10,20 +10,21 @@ Structure :
 
 Sous-dossiers supportes (ex: assets/audio/ambiance/, assets/video/success/)
 """
+
 from __future__ import annotations
 import random
 from pathlib import Path
 
 AUDIO_EXT = {".mp3", ".wav", ".ogg", ".flac", ".aac", ".m4a"}
-IMAGE_EXT  = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
-VIDEO_EXT  = {".mp4", ".mkv", ".avi", ".mov", ".webm"}
+IMAGE_EXT = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
+VIDEO_EXT = {".mp4", ".mkv", ".avi", ".mov", ".webm"}
 
 
 class AssetLibrary:
     def __init__(self, root: str = "assets"):
-        self.root  = Path(root)
+        self.root = Path(root)
         self.audio = Path(root) / "audio"
-        self.img   = Path(root) / "img"
+        self.img = Path(root) / "img"
         self.video = Path(root) / "video"
 
     def list_audio(self, subdir: str = "") -> list[Path]:
@@ -58,8 +59,9 @@ class AssetLibrary:
     def _list(folder: Path, exts: set) -> list[Path]:
         if not folder.exists():
             return []
-        return sorted(p for p in folder.rglob("*")
-                      if p.is_file() and p.suffix.lower() in exts)
+        return sorted(
+            p for p in folder.rglob("*") if p.is_file() and p.suffix.lower() in exts
+        )
 
     @staticmethod
     def _pick(files: list[Path]) -> Path | None:

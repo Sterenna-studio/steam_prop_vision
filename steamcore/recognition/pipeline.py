@@ -15,6 +15,7 @@ Usage:
     ...
     pipe.stop()
 """
+
 from __future__ import annotations
 import threading
 import time
@@ -24,19 +25,19 @@ from queue import Queue, Empty
 import cv2
 import numpy as np
 
-from .fast_detector   import FastDetector, QuadROI
-from .card_detector   import CardDetector
-from .card_recognizer import CardRecognizer, RecognitionResult
+from .fast_detector import FastDetector, QuadROI
+from .card_detector import CardDetector
+from .card_recognizer import CardRecognizer
 
 
 @dataclass
 class PipelineResult:
-    card_id:    str
-    label:      str
-    score:      float
-    matches:    int
-    roi:        QuadROI
-    timestamp:  float
+    card_id: str
+    label: str
+    score: float
+    matches: int
+    roi: QuadROI
+    timestamp: float
 
 
 class RecognitionPipeline:
@@ -48,20 +49,20 @@ class RecognitionPipeline:
 
     def __init__(
         self,
-        platest_dir:    str   = "PLATEST",
-        backend:        str   = "orb",     # "orb" ou "sift"
-        min_matches_l2: int   = 8,
-        min_inliers:    int   = 6,
-        ratio_test:     float = 0.75,
-        orb_threshold:  float = 0.04,
-        bg_interval:    float = 0.4,       # s entre deux analyses background
-        result_ttl:     float = 3.0,       # s avant d'expirer un resultat
+        platest_dir: str = "PLATEST",
+        backend: str = "orb",  # "orb" ou "sift"
+        min_matches_l2: int = 8,
+        min_inliers: int = 6,
+        ratio_test: float = 0.75,
+        orb_threshold: float = 0.04,
+        bg_interval: float = 0.4,  # s entre deux analyses background
+        result_ttl: float = 3.0,  # s avant d'expirer un resultat
     ):
-        self.bg_interval  = bg_interval
-        self.result_ttl   = result_ttl
+        self.bg_interval = bg_interval
+        self.result_ttl = result_ttl
 
-        self._fast      = FastDetector()
-        self._detector  = CardDetector(
+        self._fast = FastDetector()
+        self._detector = CardDetector(
             platest_dir=platest_dir,
             backend=backend,
             min_matches=min_matches_l2,
@@ -73,10 +74,10 @@ class RecognitionPipeline:
             threshold=orb_threshold,
         )
 
-        self._queue:  Queue       = Queue(maxsize=2)
+        self._queue: Queue = Queue(maxsize=2)
         self._result: PipelineResult | None = None
-        self._result_lock         = threading.Lock()
-        self._running             = False
+        self._result_lock = threading.Lock()
+        self._running = False
         self._thread: threading.Thread | None = None
 
     def load_config(self, cfg: dict):
@@ -85,16 +86,19 @@ class RecognitionPipeline:
         self._recognizer.load_config(cfg)
         pipe_cfg = cfg.get("pipeline", {})
         self.bg_interval = pipe_cfg.get("bg_interval", self.bg_interval)
-        self.result_ttl  = pipe_cfg.get("result_ttl",  self.result_ttl)
+        self.result_ttl = pipe_cfg.get("result_ttl", self.result_ttl)
 
     def start(self):
         self._running = True
-        self._thread  = threading.Thread(
+        self._thread = threading.Thread(
             target=self._bg_loop, daemon=True, name="recognition-bg"
         )
         self._thread.start()
-        print("[pipeline] background thread started (backend=" +
-              self._detector.backend + ")")
+        print(
+            "[pipeline] background thread started (backend="
+            + self._detector.backend
+            + ")"
+        )
 
     def stop(self):
         self._running = False
@@ -114,7 +118,7 @@ class RecognitionPipeline:
             try:
                 self._queue.put_nowait((roi, quad))
             except Exception:
-                pass   # queue pleine, on skip ce frame
+                pass  # queue pleine, on skip ce frame
 
         with self._result_lock:
             r = self._result
@@ -136,26 +140,30 @@ class RecognitionPipeline:
         self._detector.reload()
         self._recognizer.reload()
 
-    def draw_overlay(self, frame: np.ndarray,
-                     quad: QuadROI | None = None) -> np.ndarray:
+    def draw_overlay(
+        self, frame: np.ndarray, quad: QuadROI | None = None
+    ) -> np.ndarray:
         """Dessine les overlays OSD sur la frame (pour debug/stream)."""
         out = frame.copy()
         if quad is not None:
             pts = quad.corners.astype(int)
             for i in range(4):
-                cv2.line(out, tuple(pts[i]), tuple(pts[(i+1) % 4]),
-                         (0, 255, 100), 2)
-            cv2.rectangle(out, (quad.x, quad.y),
-                          (quad.x + quad.w, quad.y + quad.h),
-                          (0, 180, 255), 1)
+                cv2.line(out, tuple(pts[i]), tuple(pts[(i + 1) % 4]), (0, 255, 100), 2)
+            cv2.rectangle(
+                out,
+                (quad.x, quad.y),
+                (quad.x + quad.w, quad.y + quad.h),
+                (0, 180, 255),
+                1,
+            )
         with self._result_lock:
             r = self._result
         if r is not None:
             txt = r.card_id + "  " + str(round(r.score, 3))
-            cv2.putText(out, txt, (10, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 4)
-            cv2.putText(out, txt, (10, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 200), 2)
+            cv2.putText(out, txt, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 4)
+            cv2.putText(
+                out, txt, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 200), 2
+            )
         return out
 
     # ── background thread ────────────────────────────────────────────────────
@@ -170,7 +178,7 @@ class RecognitionPipeline:
 
             now = time.time()
             if (now - last_run) < self.bg_interval:
-                continue   # throttle
+                continue  # throttle
             last_run = now
 
             try:
@@ -193,7 +201,11 @@ class RecognitionPipeline:
                 )
                 with self._result_lock:
                     self._result = pr
-                print("[pipeline] CONFIRMED " + result.card_id +
-                      " score=" + str(round(result.score, 3)))
+                print(
+                    "[pipeline] CONFIRMED "
+                    + result.card_id
+                    + " score="
+                    + str(round(result.score, 3))
+                )
             except Exception as e:
                 print("[pipeline] bg error : " + str(e))

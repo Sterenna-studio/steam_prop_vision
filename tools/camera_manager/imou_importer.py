@@ -3,6 +3,7 @@
 Import d'exports Imou/Dahua (.xlsx ou .csv) vers une liste de caméras candidates.
 Colonnes attendues : *IP, *Port, Model, MAC, Serial No.
 """
+
 from __future__ import annotations
 import os
 import uuid
@@ -62,7 +63,7 @@ def _parse_rows(rows: list[dict], user: str, password: str) -> List[dict]:
                 "brand": "Imou",
                 "rtsp_port": RTSP_PORT,
                 "user": user,
-            }
+            },
         }
         cameras.append(cam)
     return cameras
@@ -87,6 +88,7 @@ def _from_xlsx(path: str, user: str, password: str) -> List[dict]:
 
 def _from_csv(path: str, user: str, password: str) -> List[dict]:
     import csv
+
     with open(path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         rows = list(reader)

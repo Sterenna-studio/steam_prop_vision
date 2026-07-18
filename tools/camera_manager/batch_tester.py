@@ -3,6 +3,7 @@
 Test batch de flux RTSP sur une liste de caméras.
 Résultats : OK / auth_failed / no_rtsp / timeout
 """
+
 from __future__ import annotations
 import threading
 from typing import Callable, List

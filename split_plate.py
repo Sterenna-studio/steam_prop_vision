@@ -18,11 +18,11 @@ Exemple :
   → PLATEST/plate_bougie/bougie_left.jpg
   → PLATEST/plate_bougie/bougie_right.jpg
 """
+
 from __future__ import annotations
 import argparse
 from pathlib import Path
 import cv2
-import numpy as np
 
 
 def split_image(src: Path, out_dir: Path, overlap: float = 0.15) -> list[Path]:
@@ -36,10 +36,10 @@ def split_image(src: Path, out_dir: Path, overlap: float = 0.15) -> list[Path]:
     stem = src.stem
 
     crops = {
-        "top":    img[0          : h // 2 + ov_h, :],
-        "bottom": img[h // 2 - ov_h : h,          :],
-        "left":   img[:,            0          : w // 2 + ov_w],
-        "right":  img[:,            w // 2 - ov_w : w],
+        "top": img[0 : h // 2 + ov_h, :],
+        "bottom": img[h // 2 - ov_h : h, :],
+        "left": img[:, 0 : w // 2 + ov_w],
+        "right": img[:, w // 2 - ov_w : w],
     }
 
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -54,12 +54,21 @@ def split_image(src: Path, out_dir: Path, overlap: float = 0.15) -> list[Path]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Split une image de plaque en 4 crops.")
-    parser.add_argument("image",    help="Chemin vers l'image source")
-    parser.add_argument("--platest", default=None,
-                        help="Dossier PLATEST (défaut : dossier parent de l'image)")
-    parser.add_argument("--overlap", type=float, default=0.15,
-                        help="Fraction de chevauchement (défaut : 0.15)")
+    parser = argparse.ArgumentParser(
+        description="Split une image de plaque en 4 crops."
+    )
+    parser.add_argument("image", help="Chemin vers l'image source")
+    parser.add_argument(
+        "--platest",
+        default=None,
+        help="Dossier PLATEST (défaut : dossier parent de l'image)",
+    )
+    parser.add_argument(
+        "--overlap",
+        type=float,
+        default=0.15,
+        help="Fraction de chevauchement (défaut : 0.15)",
+    )
     args = parser.parse_args()
 
     src = Path(args.image)
@@ -79,7 +88,7 @@ def main() -> None:
     print(f"[split] Sortie  : {out_dir}")
     print(f"[split] Overlap : {args.overlap * 100:.0f}%")
     split_image(src, out_dir, args.overlap)
-    print(f"[split] Done ✔")
+    print("[split] Done ✔")
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ Joue un fichier audio via ffplay (non-bloquant).
 - play_random()       : pioche aleatoirement dans assets/audio/
 - play_random(subdir) : pioche dans assets/audio/<subdir>/
 """
+
 from __future__ import annotations
 import subprocess
 import threading
@@ -34,10 +35,15 @@ class AudioPlayer:
 
     def play_random(self, subdir: str = "", blocking: bool = False) -> bool:
         folder = self.assets_dir / subdir if subdir else self.assets_dir
-        candidates = [
-            p for p in folder.rglob("*")
-            if p.is_file() and p.suffix.lower() in AUDIO_EXTENSIONS
-        ] if folder.exists() else []
+        candidates = (
+            [
+                p
+                for p in folder.rglob("*")
+                if p.is_file() and p.suffix.lower() in AUDIO_EXTENSIONS
+            ]
+            if folder.exists()
+            else []
+        )
         if not candidates:
             print(f"[audio] X Aucun fichier audio dans : {folder}")
             return False
@@ -48,8 +54,11 @@ class AudioPlayer:
         folder = self.assets_dir / subdir if subdir else self.assets_dir
         if not folder.exists():
             return []
-        return [p for p in sorted(folder.iterdir())
-                if p.is_file() and p.suffix.lower() in AUDIO_EXTENSIONS]
+        return [
+            p
+            for p in sorted(folder.iterdir())
+            if p.is_file() and p.suffix.lower() in AUDIO_EXTENSIONS
+        ]
 
     def stop(self):
         with self._lock:
@@ -66,7 +75,7 @@ class AudioPlayer:
         cmd = [self._ffplay, "-nodisp", "-autoexit", "-loglevel", "quiet", str(path)]
         with self._lock:
             self._proc = subprocess.Popen(cmd)
-            proc = self._proc   # référence locale pour éviter la race condition
+            proc = self._proc  # référence locale pour éviter la race condition
         print(f"[audio] >> {path.name}")
         if blocking:
             proc.wait()

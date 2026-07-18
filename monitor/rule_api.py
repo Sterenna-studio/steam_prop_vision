@@ -13,14 +13,15 @@ Serveur FastAPI sur :8890
 Lancer: python monitor/rule_api.py
 Accéder depuis le réseau: http://<ip_pi>:8890
 """
+
 from __future__ import annotations
 import time
 import threading
 from pathlib import Path
 
-_HERE       = Path(__file__).parent
-_ROOT       = _HERE.parent
-RULES_PATH  = _ROOT / "config" / "rules.yaml"
+_HERE = Path(__file__).parent
+_ROOT = _HERE.parent
+RULES_PATH = _ROOT / "config" / "rules.yaml"
 ASSETS_PATH = _ROOT / "assets"
 
 try:
@@ -29,19 +30,19 @@ try:
     from fastapi.middleware.cors import CORSMiddleware
     import uvicorn
     import yaml
+
     _OK = True
 except ImportError:
     _OK = False
     print("[rule_api] WARN: pip install fastapi uvicorn pyyaml")
 
-_engine_ref = None   # injecté depuis main.py
+_engine_ref = None  # injecté depuis main.py
 
 app = FastAPI(title="S.T.E.A.M Rule Editor") if _OK else None
 
 if _OK:
     app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
+        CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
     )
 
     # ── UI ────────────────────────────────────────────────────────────
@@ -78,20 +79,23 @@ if _OK:
     def reload_rules():
         if _engine_ref:
             _engine_ref.reload()
-            return JSONResponse({"status": "reloaded",
-                                 "rules": len(_engine_ref._rules)})
+            return JSONResponse(
+                {"status": "reloaded", "rules": len(_engine_ref._rules)}
+            )
         return JSONResponse({"status": "no engine attached"})
 
     # ── Status ────────────────────────────────────────────────────────
     @app.get("/status")
     def get_status():
         rules_count = len(_engine_ref._rules) if _engine_ref else None
-        return JSONResponse({
-            "status":          "running",
-            "engine_attached": _engine_ref is not None,
-            "rules":           rules_count,
-            "timestamp":       time.time(),
-        })
+        return JSONResponse(
+            {
+                "status": "running",
+                "engine_attached": _engine_ref is not None,
+                "rules": rules_count,
+                "timestamp": time.time(),
+            }
+        )
 
     # ── Assets ───────────────────────────────────────────────────────
     @app.get("/assets")
@@ -100,10 +104,13 @@ if _OK:
         for cat in ("audio", "img", "video"):
             folder = ASSETS_PATH / cat
             result[cat] = (
-                [str(p.relative_to(ASSETS_PATH / cat))
-                 for p in folder.rglob("*")
-                 if p.is_file() and not p.name.startswith(".")]
-                if folder.exists() else []
+                [
+                    str(p.relative_to(ASSETS_PATH / cat))
+                    for p in folder.rglob("*")
+                    if p.is_file() and not p.name.startswith(".")
+                ]
+                if folder.exists()
+                else []
             )
         return JSONResponse(result)
 
@@ -111,27 +118,31 @@ if _OK:
     @app.post("/test_card")
     async def test_card(request: Request):
         """Injecte une fausse détection de carte sur le WebSocket monitor."""
-        body    = await request.json()
+        body = await request.json()
         card_id = body.get("card_id", "plate_vampire")
-        label   = card_id.replace("plate_", "").replace("_", " ").capitalize()
+        label = card_id.replace("plate_", "").replace("_", " ").capitalize()
         from monitor.ws_bridge import push_event
-        push_event({
-            "type":    "card_detected",
-            "card_id": card_id,
-            "label":   label,
-            "score":   0.99,
-        })
+
+        push_event(
+            {
+                "type": "card_detected",
+                "card_id": card_id,
+                "label": label,
+                "score": 0.99,
+            }
+        )
         return JSONResponse({"status": "injected", "card_id": card_id})
 
     @app.post("/test_udp")
     async def test_udp(request: Request):
         """Envoie un paquet UDP de test vers Loxone (ou toute cible)."""
         body = await request.json()
-        msg  = body.get("msg",  "STEAM_TEST")
-        ip   = body.get("ip",   "192.168.1.50")
+        msg = body.get("msg", "STEAM_TEST")
+        ip = body.get("ip", "192.168.1.50")
         port = body.get("port", 7777)
         try:
             from steamcore.udp import send_event
+
             send_event(msg, ip, port)
             return JSONResponse({"status": "sent", "msg": msg, "ip": ip, "port": port})
         except Exception as e:
@@ -144,8 +155,10 @@ def start_in_thread(port: int = 8890, engine=None) -> threading.Thread | None:
     if not _OK:
         print("[rule_api] GUI désactivé (dépendances manquantes)")
         return None
+
     def run():
         uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning")
+
     t = threading.Thread(target=run, daemon=True, name="rule-api")
     t.start()
     print(f"[rule_api] Dashboard    →  http://0.0.0.0:{port}/monitor")
@@ -155,4 +168,5 @@ def start_in_thread(port: int = 8890, engine=None) -> threading.Thread | None:
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8890, reload=False)

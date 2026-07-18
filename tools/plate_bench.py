@@ -14,39 +14,47 @@ Usage:
     python tools/plate_bench.py --pi --no-display
     python tools/plate_bench.py --pi --stream
 """
+
 from __future__ import annotations
-import sys, os, time, argparse, threading, signal
+import sys
+import os
+import time
+import argparse
+import threading
+import signal
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import cv2
 from steamcore.recognition.pipeline import RecognitionPipeline
 
-PLATEST_DIR  = os.path.join(os.path.dirname(__file__), "..", "PLATEST")
-VIDEO_DIR    = os.path.join(os.path.dirname(__file__), "..", "assets", "video")
-WIN          = "plate_bench"
-FONT         = cv2.FONT_HERSHEY_SIMPLEX
-SNAP_DIR     = "/tmp/bench_snaps"
-STREAM_PORT  = 5051
+PLATEST_DIR = os.path.join(os.path.dirname(__file__), "..", "PLATEST")
+VIDEO_DIR = os.path.join(os.path.dirname(__file__), "..", "assets", "video")
+WIN = "plate_bench"
+FONT = cv2.FONT_HERSHEY_SIMPLEX
+SNAP_DIR = "/tmp/bench_snaps"
+STREAM_PORT = 5051
 JPEG_QUALITY = 75
 
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--src",         default="0")
-    p.add_argument("--pi",          action="store_true")
-    p.add_argument("--backend",     default="orb", choices=["orb", "sift"])
-    p.add_argument("--platest",     default=PLATEST_DIR)
-    p.add_argument("--no-display",  action="store_true")
-    p.add_argument("--stream",      action="store_true")
-    p.add_argument("--port",        type=int, default=STREAM_PORT)
-    p.add_argument("--no-video",    action="store_true")
-    p.add_argument("--video-dir",   default=VIDEO_DIR)
+    p.add_argument("--src", default="0")
+    p.add_argument("--pi", action="store_true")
+    p.add_argument("--backend", default="orb", choices=["orb", "sift"])
+    p.add_argument("--platest", default=PLATEST_DIR)
+    p.add_argument("--no-display", action="store_true")
+    p.add_argument("--stream", action="store_true")
+    p.add_argument("--port", type=int, default=STREAM_PORT)
+    p.add_argument("--no-video", action="store_true")
+    p.add_argument("--video-dir", default=VIDEO_DIR)
     p.add_argument("--bg-interval", type=float, default=0.4)
-    p.add_argument("--result-ttl",  type=float, default=3.0)
+    p.add_argument("--result-ttl", type=float, default=3.0)
     return p.parse_args()
 
 
 # ── Camera ────────────────────────────────────────────────────────────────────
+
 
 def open_cv_cap(src_str):
     src = int(src_str) if src_str.isdigit() else src_str
@@ -58,16 +66,18 @@ def open_cv_cap(src_str):
 
 def open_picam(w=1280, h=720):
     from picamera2 import Picamera2
+
     cam = Picamera2()
-    cam.configure(cam.create_preview_configuration(
-        main={"size": (w, h), "format": "RGB888"}
-    ))
+    cam.configure(
+        cam.create_preview_configuration(main={"size": (w, h), "format": "RGB888"})
+    )
     cam.start()
     time.sleep(2.0)
     return cam
 
 
 # ── OSD bench (mode --no-video uniquement) ───────────────────────────────
+
 
 def put(img, text, pos, color=(0, 255, 255), scale=0.55, thick=2):
     cv2.putText(img, text, pos, FONT, scale, (0, 0, 0), thick + 2)
@@ -79,16 +89,24 @@ def build_overlay(frame, quad, result, fps, dt_ms, backend):
     if quad is not None:
         pts = quad.corners.astype(int)
         for i in range(4):
-            cv2.line(out, tuple(pts[i]), tuple(pts[(i+1) % 4]), (0, 255, 100), 2)
-        cv2.rectangle(out, (quad.x, quad.y),
-                      (quad.x + quad.w, quad.y + quad.h), (0, 180, 255), 1)
-    put(out, "FPS " + str(round(fps, 1)) + "  L1 " + str(round(dt_ms)) + "ms",
-        (10, 24))
+            cv2.line(out, tuple(pts[i]), tuple(pts[(i + 1) % 4]), (0, 255, 100), 2)
+        cv2.rectangle(
+            out, (quad.x, quad.y), (quad.x + quad.w, quad.y + quad.h), (0, 180, 255), 1
+        )
+    put(out, "FPS " + str(round(fps, 1)) + "  L1 " + str(round(dt_ms)) + "ms", (10, 24))
     put(out, "backend=" + backend, (10, 48))
     if quad:
-        put(out, "quad conf=" + str(round(quad.confidence, 2)) +
-            "  ROI " + str(quad.w) + "x" + str(quad.h),
-            (10, 72), (0, 255, 100))
+        put(
+            out,
+            "quad conf="
+            + str(round(quad.confidence, 2))
+            + "  ROI "
+            + str(quad.w)
+            + "x"
+            + str(quad.h),
+            (10, 72),
+            (0, 255, 100),
+        )
     else:
         put(out, "no quad", (10, 72), (0, 100, 255))
     if result:
@@ -98,16 +116,19 @@ def build_overlay(frame, quad, result, fps, dt_ms, backend):
         cy = out.shape[0] - 40
         cv2.putText(out, label, (cx, cy), FONT, 1.4, (0, 0, 0), 6)
         cv2.putText(out, label, (cx, cy), FONT, 1.4, (0, 220, 255), 3)
-        put(out, "CONFIRMED: " + result.card_id +
-            "  score=" + str(round(result.score, 3)),
-            (10, 96), (0, 200, 255))
+        put(
+            out,
+            "CONFIRMED: " + result.card_id + "  score=" + str(round(result.score, 3)),
+            (10, 96),
+            (0, 200, 255),
+        )
     return out
 
 
 # ── MJPEG stream ──────────────────────────────────────────────────────────────
 
 _stream_frame = None
-_stream_lock  = threading.Lock()
+_stream_lock = threading.Lock()
 
 
 def _update_stream(frame):
@@ -131,6 +152,7 @@ def _gen_frames():
 
 def start_flask_server(port):
     from flask import Flask, Response
+
     app = Flask(__name__)
 
     @app.route("/")
@@ -144,17 +166,20 @@ def start_flask_server(port):
 
     @app.route("/stream")
     def stream():
-        return Response(_gen_frames(),
-                        mimetype="multipart/x-mixed-replace; boundary=frame")
+        return Response(
+            _gen_frames(), mimetype="multipart/x-mixed-replace; boundary=frame"
+        )
 
     threading.Thread(
         target=lambda: app.run(host="0.0.0.0", port=port, threaded=True),
-        daemon=True, name="flask-bench"
+        daemon=True,
+        name="flask-bench",
     ).start()
     print("[bench] MJPEG -> http://<IP_STYX>:" + str(port) + "/")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
+
 
 def main():
     args = parse_args()
@@ -168,18 +193,25 @@ def main():
     )
     pipe.start()
     print("[bench] cards   : " + str(pipe.card_ids))
-    print("[bench] backend=" + args.backend +
-          "  headless=" + str(args.no_display) +
-          "  stream=" + str(args.stream) +
-          "  video=" + str(not args.no_video))
+    print(
+        "[bench] backend="
+        + args.backend
+        + "  headless="
+        + str(args.no_display)
+        + "  stream="
+        + str(args.stream)
+        + "  video="
+        + str(not args.no_video)
+    )
 
     # ── VideoPlayer ───────────────────────────────────────────────────────────
     player = None
     if not args.no_video and not args.no_display and not args.stream:
         try:
             from apps.video_player import VideoPlayer
+
             player = VideoPlayer(video_dir=args.video_dir)
-            player.start()   # thread principal ✔
+            player.start()  # thread principal ✔
             print("[bench] VideoPlayer prêt")
         except Exception as e:
             print("[bench] VideoPlayer indisponible : " + str(e))
@@ -190,28 +222,37 @@ def main():
 
     # ── Camera ────────────────────────────────────────────────────────────────
     if args.pi:
-        cam      = open_picam()
-        read_fn  = lambda: __import__('cv2').cvtColor(
-                       cam.capture_array(), __import__('cv2').COLOR_RGB2BGR)
+        cam = open_picam()
+
+        def read_fn():
+            import cv2
+
+            return cv2.cvtColor(cam.capture_array(), cv2.COLOR_RGB2BGR)
+
         close_fn = cam.stop
     else:
-        cap      = open_cv_cap(args.src)
-        read_fn  = lambda: (lambda ok, f: f if ok else None)(*cap.read())
+        cap = open_cv_cap(args.src)
+
+        def read_fn():
+            ok, f = cap.read()
+            return f if ok else None
+
         close_fn = cap.release
 
-    fps_t        = time.time()
-    fps_val      = 0.0
-    snap_n       = 0
+    fps_t = time.time()
+    fps_val = 0.0
+    snap_n = 0
     last_snap_id = None
     last_play_id = None
-    paused       = False
-    running      = True
-    out          = None
+    paused = False
+    running = True
+    out = None
 
     def _stop(_s=None, _f=None):
         nonlocal running
         running = False
-    signal.signal(signal.SIGINT,  _stop)
+
+    signal.signal(signal.SIGINT, _stop)
     signal.signal(signal.SIGTERM, _stop)
 
     if not args.no_display and not args.stream:
@@ -228,14 +269,14 @@ def main():
                 print("[bench] fin du flux")
                 break
 
-            t0     = time.time()
-            quad   = pipe._fast.detect(frame)
+            t0 = time.time()
+            quad = pipe._fast.detect(frame)
             result = pipe.process_frame(frame)
-            dt_ms  = (time.time() - t0) * 1000
+            dt_ms = (time.time() - t0) * 1000
 
-            now     = time.time()
+            now = time.time()
             fps_val = 0.9 * fps_val + 0.1 / max(now - fps_t, 1e-5)
-            fps_t   = now
+            fps_t = now
 
             # Déclencher la vidéo sur nouvelle carte confirmée
             if player and result:
@@ -249,10 +290,12 @@ def main():
             if args.no_display:
                 new_id = result.card_id if result else None
                 if new_id and new_id != last_snap_id:
-                    out = build_overlay(frame, quad, result, fps_val,
-                                        dt_ms, args.backend)
+                    out = build_overlay(
+                        frame, quad, result, fps_val, dt_ms, args.backend
+                    )
                     snap_path = os.path.join(
-                        SNAP_DIR, "snap_" + str(snap_n) + "_" + new_id + ".jpg")
+                        SNAP_DIR, "snap_" + str(snap_n) + "_" + new_id + ".jpg"
+                    )
                     cv2.imwrite(snap_path, out)
                     print("[bench] snap -> " + snap_path)
                     snap_n += 1
@@ -262,16 +305,14 @@ def main():
 
             # ── Mode stream ───────────────────────────────────────────────────
             if args.stream:
-                out = build_overlay(frame, quad, result, fps_val,
-                                    dt_ms, args.backend)
+                out = build_overlay(frame, quad, result, fps_val, dt_ms, args.backend)
                 _update_stream(out)
                 time.sleep(0.04)
                 continue
 
             # ── Mode display local (bench --no-video) ───────────────────────
             if not player:
-                out = build_overlay(frame, quad, result, fps_val,
-                                    dt_ms, args.backend)
+                out = build_overlay(frame, quad, result, fps_val, dt_ms, args.backend)
                 cv2.imshow(WIN, out)
 
         # ── Touches clavier ──────────────────────────────────────────────────

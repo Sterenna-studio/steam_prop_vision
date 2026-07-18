@@ -4,15 +4,15 @@ steamcore/udp.py
 - broadcast()    : envoie STEAM_RUN_OK en broadcast LAN
 - UDPListener    : écoute les ACK/commandes entrants
 """
+
 from __future__ import annotations
 import socket
 import threading
-import time
 
 
 BROADCAST_PORT = 9999
-LOXONE_PORT    = 7777
-LISTEN_PORT    = 8888
+LOXONE_PORT = 7777
+LISTEN_PORT = 8888
 
 
 def send_event(msg: str, ip: str, port: int = LOXONE_PORT) -> None:
@@ -31,6 +31,7 @@ def broadcast(msg: str = "STEAM_RUN_OK", port: int = BROADCAST_PORT) -> None:
 
 class HeartbeatThread(threading.Thread):
     """Envoie STEAM_RUN_OK en broadcast toutes les `interval` secondes."""
+
     def __init__(self, interval: float = 5.0):
         super().__init__(daemon=True)
         self.interval = interval
@@ -50,10 +51,13 @@ class UDPListener(threading.Thread):
     Écoute les messages UDP entrants (ACK Loxone, commandes réseau).
     Appelle on_message(msg: str, addr: tuple) à chaque réception.
     """
+
     def __init__(self, port: int = LISTEN_PORT, on_message=None):
         super().__init__(daemon=True)
         self.port = port
-        self.on_message = on_message or (lambda msg, addr: print(f"[udp] ← {addr} : {msg}"))
+        self.on_message = on_message or (
+            lambda msg, addr: print(f"[udp] ← {addr} : {msg}")
+        )
         self._stop_event = threading.Event()
 
     def run(self):

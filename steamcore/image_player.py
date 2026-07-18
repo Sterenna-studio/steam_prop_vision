@@ -6,6 +6,7 @@ Utilise mpv (préféré) ou feh en fallback.
   mpv  : sudo apt install mpv
   feh  : sudo apt install feh
 """
+
 from __future__ import annotations
 import os
 import subprocess
@@ -21,7 +22,7 @@ class ImagePlayer:
     def __init__(self, assets_dir: str = "assets/img"):
         self.assets_dir = Path(assets_dir)
         self._proc: subprocess.Popen | None = None
-        self._lock   = threading.Lock()
+        self._lock = threading.Lock()
         self._player = self._detect_player()
 
     @staticmethod
@@ -45,10 +46,15 @@ class ImagePlayer:
 
     def show_random(self, subdir: str = "", blocking: bool = False) -> bool:
         folder = self.assets_dir / subdir if subdir else self.assets_dir
-        candidates = [
-            p for p in folder.rglob("*")
-            if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
-        ] if folder.exists() else []
+        candidates = (
+            [
+                p
+                for p in folder.rglob("*")
+                if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
+            ]
+            if folder.exists()
+            else []
+        )
         if not candidates:
             print(f"[image] X Aucune image dans : {folder}")
             return False
@@ -70,8 +76,11 @@ class ImagePlayer:
         folder = self.assets_dir / subdir if subdir else self.assets_dir
         if not folder.exists():
             return []
-        return sorted(p for p in folder.rglob("*")
-                      if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS)
+        return sorted(
+            p
+            for p in folder.rglob("*")
+            if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
+        )
 
     # ── Interne ───────────────────────────────────────────────────
     def _launch(self, path: Path, blocking: bool):
@@ -79,9 +88,9 @@ class ImagePlayer:
         cmd = self._build_cmd(path)
         env = {**os.environ, "DISPLAY": ":0"}
         with self._lock:
-            self._proc = subprocess.Popen(cmd, env=env,
-                                          stdout=subprocess.DEVNULL,
-                                          stderr=subprocess.DEVNULL)
+            self._proc = subprocess.Popen(
+                cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
             proc = self._proc
         print(f"[image] >> {path.name}  (via {self._player})")
         if blocking:
@@ -95,7 +104,7 @@ class ImagePlayer:
                 "--no-terminal",
                 "--really-quiet",
                 "--no-audio",
-                f"--image-display-duration=inf",
+                "--image-display-duration=inf",
                 str(path),
             ]
         elif self._player == "feh":
