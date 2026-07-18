@@ -13,11 +13,13 @@ import numpy as np
 
 
 def _find_images(directory: Path) -> list:
-    exts = ["*.jpg", "*.jpeg", "*.png", "*.JPG", "*.JPEG", "*.PNG", "*.webp"]
-    imgs = []
-    for ext in exts:
-        imgs.extend(directory.rglob(ext))  # récursif : trouve images/ sous-dossier
-    return [p for p in imgs if not p.name.startswith(".")]
+    exts = {".jpg", ".jpeg", ".png", ".webp"}
+    imgs = {p for p in directory.rglob("*") if p.suffix.lower() in exts}
+    return [
+        p
+        for p in imgs
+        if not p.name.startswith(".") and not p.name.startswith("preview_")
+    ]
 
 
 @dataclass

@@ -42,11 +42,19 @@ flowchart TD
     R --> S{held_ms ≥ card_hold_ms ?}
     S -- NON --> C
 
-    S -- OUI --> T[🚀 TRIGGER\nrun_actions : lookup config/rules.yaml]
+    S -- OUI --> RC{card_id =\nplate_ready_check ?}
+    RC -- OUI --> RCY["📺 WS system_ready\n'STEAM VISION READY' sur /view\n(pas d'UDP/vidéo/audio)"]
+    RCY --> Reset
+
+    RC -- NON --> T[🚀 TRIGGER\nrun_actions : lookup config/rules.yaml]
     T --> U[📡 UDP → Loxone] & V[🎬 Vidéo mpv] & W[🔊 Audio] & X[📺 WS card_detected]
     U & V & W & X --> Y[État = STANDBY]
     Y --> C
 ```
+
+`plate_ready_check` est un `card_id` réservé (auto-test GM, voir
+[README.md](README.md#platest--templates-de-reconnaissance)) : il court-circuite
+`run_actions()` et reste en `IDLE` — aucune STANDBY, aucun effet réel.
 
 ---
 

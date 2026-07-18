@@ -49,6 +49,11 @@ from monitor.rule_api import start_in_thread as start_rule_api
 CONFIG_FILE = "config/features.yaml"
 LOG_FILE = "logs/steam_vision.log"
 
+# Carte réservée : auto-test GM (PLATEST/plate_ready_check/). La montrer à la
+# caméra confirme que la chaîne caméra->L1->L2->L3->WebSocket fonctionne, via
+# un bandeau dédié sur /view — sans déclencher UDP Loxone, vidéo ni audio.
+READY_CHECK_CARD_ID = "plate_ready_check"
+
 
 # ── MJPEG stream (optionnel, thread daemon) ────────────────────────
 _stream_frame: bytes | None = None
@@ -189,6 +194,10 @@ body{background:#000;color:#fff;font-family:monospace;height:100vh;display:flex;
 #standby .icon{font-size:72px;color:#00e5cc;text-shadow:0 0 40px #00e5cc88}
 #standby .name{font-size:clamp(18px,3vw,32px);letter-spacing:.12em}
 #standby .sub{font-size:13px;color:#888;letter-spacing:.08em}
+#ready{position:absolute;inset:0;background:rgba(0,0,0,.85);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+#ready .check{width:64px;height:64px;border-radius:50%;background:#0d2318;border:2px solid #4caf50;display:flex;align-items:center;justify-content:center;font-size:28px;color:#4caf50}
+#ready .txt{font-size:clamp(16px,2.6vw,26px);letter-spacing:.08em;color:#4caf50;font-weight:bold}
+#ready .sub{font-size:11px;color:#666;letter-spacing:.06em}
 #bar{height:44px;background:rgba(0,0,0,.92);border-top:1px solid #1a1a1a;display:flex;align-items:center;padding:0 18px;gap:20px;font-size:12px}
 .badge{padding:2px 9px;border-radius:3px;font-weight:bold;letter-spacing:.08em;font-size:11px}
 #fsm-b{background:#222;color:#666}
@@ -212,6 +221,11 @@ body{background:#000;color:#fff;font-family:monospace;height:100vh;display:flex;
     <div class="name" id="sb-name">\xe2\x80\x94</div>
     <div class="sub">en cours de lecture</div>
   </div>
+  <div id="ready">
+    <div class="check">&#10003;</div>
+    <div class="txt" id="ready-txt">STEAM VISION READY</div>
+    <div class="sub">CAM&Eacute;RA &middot; D&Eacute;TECTION &middot; RECONNAISSANCE &mdash; OK</div>
+  </div>
 </div>
 <div id="bar">
   <span>FSM&nbsp;<span id="fsm-b" class="badge idle">IDLE</span></span>
@@ -223,6 +237,8 @@ const $=id=>document.getElementById(id);
 const fsmEl=$('fsm-b'),cardEl=$('card-d'),wsEl=$('ws-d');
 const holdEl=$('hold'),holdFill=$('hold-fill'),holdTxt=$('hold-txt');
 const sbEl=$('standby'),sbName=$('sb-name');
+const readyEl=$('ready'),readyTxt=$('ready-txt');
+let readyTimer=null;
 
 function fsm(s){
   fsmEl.textContent=s;
@@ -240,6 +256,13 @@ function handle(ev){
     holdFill.style.width=ev.pct+'%';
     holdTxt.textContent=ev.label+'  '+ev.pct+'%';
     cardEl.textContent=ev.label;
+  }else if(ev.type==='system_ready'){
+    holdEl.style.display='none';
+    cardEl.textContent='\xe2\x80\x94';
+    readyTxt.textContent=ev.label||'STEAM VISION READY';
+    readyEl.style.display='flex';
+    clearTimeout(readyTimer);
+    readyTimer=setTimeout(()=>{readyEl.style.display='none';},4000);
   }
 }
 function connect(){
@@ -538,6 +561,12 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
         )
 
         if held_ms < card_hold_ms:
+            continue
+
+        if result.card_id == READY_CHECK_CARD_ID:
+            log.info("[ready-check] STEAM VISION READY (auto-test GM)")
+            push_event({"type": "system_ready", "label": "STEAM VISION READY"})
+            _reset_detection()
             continue
 
         log.info(

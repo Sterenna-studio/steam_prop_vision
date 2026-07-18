@@ -202,8 +202,9 @@ Events émis :
 
 | type | Contenu |
 |---|---|
-| `state` | `IDLE / INSPECTION / TRIGGERED` |
+| `state` | `IDLE / STANDBY` |
 | `card_detected` | `card_id, label, score` |
+| `system_ready` | `label` — auto-test GM (carte `plate_ready_check`), affiché sur `/view` |
 | `count` | Nombre de joueurs |
 | `movement` | `direction, dx, dy, speed` |
 | `udp_sent` | Message envoyé à Loxone |
@@ -215,6 +216,12 @@ Events émis :
 
 Chaque sous-dossier = une carte. Mettre **minimum 2-3 images** par carte,
 idéalement **10-15** en conditions réelles (éclairage salle, angles variés).
+
+> `plate_ready_check` est un identifiant **réservé** : la montrer à la caméra
+> affiche un bandeau "STEAM VISION READY" sur `/view` pendant quelques
+> secondes (confirme caméra → L1 → L2 → L3 → WebSocket), **sans** déclencher
+> UDP Loxone, vidéo ni audio — utile aux GM pour un auto-test rapide avant une
+> session. Ne pas réutiliser cet `card_id` pour une vraie plaque de jeu.
 
 ```
 PLATEST/
