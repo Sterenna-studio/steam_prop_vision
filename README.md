@@ -117,6 +117,7 @@ paramètres :
 | `enable_watchdog` | `true` | arrêt forcé si la boucle se fige (voir plus bas) |
 | `watchdog_timeout_s` | `20.0` | secondes sans activité avant arrêt forcé |
 | `mission_id` | `"flux_1"` | identifiant de mission comparé au QR de validation GM |
+| `camera_rotation` | `0` | `0`/`90`/`180`/`270` — corrige le montage physique de la caméra |
 | `loxone_ip` | `192.168.1.50` | IP de la box Loxone |
 | `yolo_model` | `yolov8n.pt` | Modèle YOLO (mode person uniquement) |
 

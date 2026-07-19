@@ -154,6 +154,22 @@ class QRFluxChecker:
         }
 
 
+# ── Orientation caméra ───────────────────────────────────────────────
+# camera_rotation dans features.yaml (0/90/180/270) corrige le montage
+# physique de la caméra. Appliqué juste après capture, avant détection ET
+# stream — toute la pipeline (pas seulement /view) voit une image droite.
+_ROTATE_MAP = {
+    90: cv2.ROTATE_90_CLOCKWISE,
+    180: cv2.ROTATE_180,
+    270: cv2.ROTATE_90_COUNTERCLOCKWISE,
+}
+
+
+def _rotate_frame(frame, rotation: int):
+    code = _ROTATE_MAP.get(rotation)
+    return cv2.rotate(frame, code) if code is not None else frame
+
+
 # ── MJPEG stream (optionnel, thread daemon) ────────────────────────
 _stream_frame: bytes | None = None
 _stream_lock = threading.Lock()
@@ -639,6 +655,7 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
     card_min_area = cfg.get("card_min_area", 4000)
     card_min_match = cfg.get("card_min_matches", 12)
     card_threshold = cfg.get("card_score_threshold", 0.20)
+    camera_rotation = cfg.get("camera_rotation", 0)
     consec_required = cfg.get("card_consec_frames", 5)
 
     fast_detector = FastDetector(min_area=card_min_area)
@@ -689,6 +706,7 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
             continue
         _touch_alive()
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        frame = _rotate_frame(frame, camera_rotation)
         _update_stream_frame(frame)
         frame_count += 1
         now = time.time()
@@ -820,6 +838,7 @@ def run_person_mode(cfg, cam, rule_engine, audio, video):
     person_duration = cfg.get("person_duration", 2.0)
     persist = cfg.get("persist_after_loss", 5.0)
     idle_after_s = cfg.get("idle_after_s", 3.0)
+    camera_rotation = cfg.get("camera_rotation", 0)
 
     detector = YOLODetector(
         model_path=cfg.get("yolo_model", "yolov8n.pt"),
@@ -857,6 +876,7 @@ def run_person_mode(cfg, cam, rule_engine, audio, video):
             continue
         _touch_alive()
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        frame = _rotate_frame(frame, camera_rotation)
         _update_stream_frame(frame)
         frame_count += 1
         now = time.time()

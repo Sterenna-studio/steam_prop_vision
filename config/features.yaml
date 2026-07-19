@@ -47,6 +47,7 @@ stream_port: 5050           # port HTTP du stream MJPEG et de la page /view
 # ── Caméra ────────────────────────────────────────────────────────
 camera_width: 1280
 camera_height: 720
+camera_rotation: 0          # 0/90/180/270 — corrige le montage physique de la caméra
 
 # ── YOLO (mode person uniquement) ────────────────────────────────
 yolo_model: "yolov8n.pt"
