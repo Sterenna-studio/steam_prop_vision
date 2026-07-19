@@ -90,6 +90,10 @@ QR_FLUX_PREFIX = "STEAM_FLUX:"
 QR_CHECK_EVERY = 5  # ne scanne le QR qu'une frame sur N (coût CPU)
 QR_REPEAT_COOLDOWN = 3.0  # s avant de repousser le même event pour le même QR
 
+# ── Monitoring /view (FPS + score continu) ──────────────────────────
+FPS_PUSH_INTERVAL = 1.0  # s entre deux mises à jour du compteur FPS
+SCORE_PUSH_INTERVAL = 0.3  # s entre deux mises à jour du score ORB en direct
+
 
 def _decode_qr(frame, cv2_detector) -> str | None:
     """Décode un QR dans la frame (pyzbar si dispo, sinon cv2 en repli)."""
@@ -381,14 +385,26 @@ body{background:#000;color:#fff;font-family:monospace;height:100vh;display:flex;
 #fsm-b.idle{background:#0d1f0d;color:#4caf50}
 #fsm-b.standby{background:#001f1f;color:#00e5cc}
 #card-d{color:#bbb}
+#fps-d{color:#555;font-variant-numeric:tabular-nums}
 #ws-d{margin-left:auto;font-size:10px;color:#444}
 #ws-d.ok{color:#4caf50}
 #ws-d.err{color:#e53935}
+#score{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.55);padding:4px 10px;border-radius:4px;font-size:12px;color:#666;letter-spacing:.03em;font-variant-numeric:tabular-nums}
+#score.hit{color:#00e5cc}
+#history{position:absolute;top:10px;right:10px;background:rgba(0,0,0,.55);border-radius:4px;padding:6px 10px;font-size:11px;max-width:190px}
+#history .h-title{color:#555;font-size:9px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+#history .h-item{display:flex;justify-content:space-between;gap:10px;color:#bbb;padding:2px 0}
+#history .h-time{color:#555;font-size:10px;font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
 <div id="wrap">
   <img id="stream" src="/stream" alt="">
+  <div id="score">score: \xe2\x80\x94</div>
+  <div id="history">
+    <div class="h-title">Historique</div>
+    <div id="history-list"></div>
+  </div>
   <div id="hold">
     <div id="hold-track"><div id="hold-fill"></div></div>
     <div id="hold-txt"></div>
@@ -412,15 +428,18 @@ body{background:#000;color:#fff;font-family:monospace;height:100vh;display:flex;
 <div id="bar">
   <span>FSM&nbsp;<span id="fsm-b" class="badge idle">IDLE</span></span>
   <span id="card-d">\xe2\x80\x94</span>
+  <span id="fps-d">\xe2\x80\x94 fps</span>
   <span id="ws-d">&#9679; ws\xe2\x80\xa6</span>
 </div>
 <script>
 const $=id=>document.getElementById(id);
-const fsmEl=$('fsm-b'),cardEl=$('card-d'),wsEl=$('ws-d');
+const fsmEl=$('fsm-b'),cardEl=$('card-d'),wsEl=$('ws-d'),fpsEl=$('fps-d');
 const holdEl=$('hold'),holdFill=$('hold-fill'),holdTxt=$('hold-txt');
 const sbEl=$('standby'),sbName=$('sb-name');
 const readyEl=$('ready'),readyTxt=$('ready-txt');
 const mismatchEl=$('mismatch'),mismatchSub=$('mismatch-sub');
+const scoreEl=$('score'),historyListEl=$('history-list');
+const history=[];
 
 function flash(el,ms){
   el.style.display='flex';
@@ -431,6 +450,18 @@ function fsm(s){
   fsmEl.textContent=s;
   fsmEl.className='badge '+(s==='STANDBY'?'standby':'idle');
 }
+function pad2(n){return String(n).padStart(2,'0');}
+function nowHMS(){
+  const d=new Date();
+  return pad2(d.getHours())+':'+pad2(d.getMinutes())+':'+pad2(d.getSeconds());
+}
+function pushHistory(label){
+  history.unshift({label:label,time:nowHMS()});
+  history.length=Math.min(history.length,6);
+  historyListEl.innerHTML=history.map(h=>
+    '<div class="h-item"><span>'+h.label+'</span><span class="h-time">'+h.time+'</span></div>'
+  ).join('');
+}
 function handle(ev){
   if(ev.type==='state'){
     fsm(ev.state);
@@ -438,6 +469,20 @@ function handle(ev){
     else{sbEl.style.display='none';if(ev.state==='IDLE'){holdEl.style.display='none';cardEl.textContent='\xe2\x80\x94';}}
   }else if(ev.type==='card_detected'){
     cardEl.textContent=ev.label;sbName.textContent=ev.label;
+    pushHistory(ev.label);
+  }else if(ev.type==='fps'){
+    fpsEl.textContent=ev.value.toFixed(1)+' fps';
+  }else if(ev.type==='score'){
+    if(ev.card_id){
+      scoreEl.textContent=ev.card_id.replace('plate_','')+': '+ev.score.toFixed(3);
+      scoreEl.className='hit';
+    }else if(ev.score>0){
+      scoreEl.textContent='score: '+ev.score.toFixed(3);
+      scoreEl.className='';
+    }else{
+      scoreEl.textContent='score: \xe2\x80\x94';
+      scoreEl.className='';
+    }
   }else if(ev.type==='hold'){
     holdEl.style.display='block';
     holdFill.style.width=ev.pct+'%';
@@ -457,7 +502,7 @@ function handle(ev){
 }
 function connect(){
   const ws=new WebSocket('ws://'+location.hostname+':8889');
-  ws.onopen=()=>{wsEl.textContent='\xe2\x97\x8f connect\xe9';wsEl.className='ok';};
+  ws.onopen=()=>{wsEl.textContent='\xe2\x97\x8f connect\xc3\xa9';wsEl.className='ok';};
   ws.onclose=()=>{wsEl.textContent='\xe2\x97\x8b reconnexion\xe2\x80\xa6';wsEl.className='err';setTimeout(connect,3000);};
   ws.onerror=()=>ws.close();
   ws.onmessage=e=>{try{handle(JSON.parse(e.data));}catch(_){}};
@@ -673,6 +718,10 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
     consec_count = 0
     frame_count = 0
 
+    fps_count = 0
+    fps_last_push = time.time()
+    last_score_push = 0.0
+
     log.info(
         "[card] Pipeline card — IDLE (hold="
         + str(card_hold_ms)
@@ -699,6 +748,13 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
         consec_card_id = None
         consec_count = 0
 
+    def _push_score(now, card_id, score):
+        nonlocal last_score_push
+        if now - last_score_push < SCORE_PUSH_INTERVAL:
+            return
+        last_score_push = now
+        push_event({"type": "score", "card_id": card_id, "score": round(score, 3)})
+
     while running:
         frame = cam.capture_array()
         if frame is None:
@@ -710,6 +766,13 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
         _update_stream_frame(frame)
         frame_count += 1
         now = time.time()
+
+        fps_count += 1
+        if now - fps_last_push >= FPS_PUSH_INTERVAL:
+            fps = fps_count / (now - fps_last_push)
+            push_event({"type": "fps", "value": round(fps, 1)})
+            fps_count = 0
+            fps_last_push = now
 
         if _force_reset.is_set():
             _force_reset.clear()
@@ -739,6 +802,7 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
         if quad is None:
             if consec_card_id is not None:
                 _reset_detection()
+            _push_score(now, None, 0.0)
             continue
 
         roi = quad.crop(frame)
@@ -746,9 +810,11 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
         if region is None:
             if consec_card_id is not None:
                 _reset_detection()
+            _push_score(now, None, 0.0)
             continue
 
         result = recognizer.recognize(region.warped)
+        _push_score(now, recognizer.last_card_id, recognizer.last_score)
         if result is None:
             if consec_card_id is not None:
                 _reset_detection()

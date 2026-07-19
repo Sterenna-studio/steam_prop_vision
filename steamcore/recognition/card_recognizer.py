@@ -46,6 +46,13 @@ class CardRecognizer:
         self._templates: list = []
         self._load()
 
+        # Dernier score tenté, mis à jour à CHAQUE appel de recognize() —
+        # y compris sous le seuil (recognize() retourne None dans ce cas).
+        # Permet un affichage continu (ex: /view) sans changer le contrat
+        # de recognize() ni casser les appelants existants.
+        self.last_score = 0.0
+        self.last_card_id: str | None = None
+
     def load_config(self, cfg: dict):
         det = cfg.get("detection", {})
         self.min_matches = det.get("min_matches", self.min_matches)
@@ -85,6 +92,9 @@ class CardRecognizer:
                             best_img = img_name
                 except Exception:
                     continue
+
+        self.last_score = best_score
+        self.last_card_id = best_id
 
         if best_id is None:
             return None
