@@ -9,8 +9,8 @@
 | Je veux… | Action |
 | --- | --- |
 | Démarrer le pipeline | `python apps/rpi/main.py` |
-| Utiliser le lanceur Unix existant | `./run.sh` |
 | Utiliser le lanceur Linux existant | `./scripts/linux_run.sh` |
+| Démarrer/relancer via systemd | `sudo systemctl restart steam-vision` |
 | Lancer les tests | `pytest` puis `ruff check .` |
 | Voir le flux et les métriques | Ouvrir `/view` sur STYX |
 | Ajouter une plaque | Voir [Ajouter une plaque](#ajouter-une-plaque) |

@@ -23,6 +23,7 @@ fichier `config.json` (format JSON, pas YAML) au lieu de `config/features.yaml` 
 | `run_gui.bat`, `build_gui_exe.bat` | Lancent/compilent `gui.app` — **module `gui/` introuvable dans le dépôt**, ces scripts étaient déjà cassés avant l'archivage |
 | `run_builder.bat`, `build_builder_exe.bat`, `build_all_exe.bat` | Lancent/compilent `config_builder_app.py` |
 | `run.sh` | Ancien script de lancement Linux (`python3 -m gui.app`) — également cassé, même raison |
+| `run_v2.sh` | Autre ancien lanceur racine (`./run.sh [--debug\|--escape]`), appelait `main.py`/`gui_setup.py` — cassé depuis leur archivage ici (chemins relatifs à la racine du dépôt, plus valides depuis `legacy/`) |
 
 ## Pourquoi archivé plutôt que supprimé
 
