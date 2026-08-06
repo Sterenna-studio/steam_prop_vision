@@ -2,6 +2,21 @@
 apps/rpi/actions.py
 Dispatch des actions déclenchées par une carte reconnue ou une commande
 Loxone, et gestion des commandes entrantes (voir LOXONE.md).
+
+Câblage RuleEngine.should_trigger()/mark_triggered() : protège en particulier
+le trigger manuel Loxone (STEAM_TRIGGER:<id>), seul chemin qui contourne le
+FSM caméra (IDLE/STANDBY) et pouvait donc rejouer une action sans limite. Le
+cooldown fonctionne correctement avec cet appel unique (time-since-last-
+trigger). min_duration, lui, suppose un appelant qui interroge
+should_trigger() à répétition tant qu'un label est vu — avec ce point d'appel
+unique (au moment où le FSM a déjà confirmé le trigger), min_duration>0 sur
+une règle active ne déclencherait jamais. RuleEngine.reload() avertit si une
+règle enabled a min_duration>0 (voir steamcore/rules.py).
+
+Le cooldown ne s'applique qu'aux actions réellement configurées (audio/
+vidéo/UDP dans rules.yaml) : le ping informatif STEAM_DETECT_<id> envoyé pour
+une carte sans règle configurée n'a aucun effet à rejouer et reste donc
+inconditionnel, comme avant ce câblage.
 """
 
 from __future__ import annotations
@@ -41,8 +56,15 @@ def run_actions(cfg, rule_engine, label_or_result, audio, video, card_id=None):
 
     actions = rule_engine.get_actions(cid)
     if not actions:
+        # Pas de règle configurée pour cette carte : simple ping informatif,
+        # jamais soumis au cooldown (comportement inchangé — aucun effet à
+        # rejouer, contrairement aux actions audio/vidéo/UDP ci-dessous).
         msg = "STEAM_DETECT_" + cid.upper()
         udp_send(msg, lox_ip, lox_port)
+        return
+
+    if not rule_engine.should_trigger(cid):
+        log.info(f"[rules] {cid} ignoré (cooldown actif)")
         return
 
     for action in actions:
@@ -71,6 +93,8 @@ def run_actions(cfg, rule_engine, label_or_result, audio, video, card_id=None):
         elif action.type == "udp":
             msg = action.message or ("STEAM_DETECT_" + cid.upper())
             udp_send(msg, lox_ip, lox_port)
+
+    rule_engine.mark_triggered(cid)
 
 
 def handle_loxone_command(

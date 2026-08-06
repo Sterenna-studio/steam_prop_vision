@@ -164,6 +164,20 @@ class RuleEngine:
         }
         print(f"[rules] {len(self._rules)} règles chargées depuis {self.config_path}")
 
+        # should_trigger() n'est appelé qu'une seule fois par label, au moment
+        # où le trigger est déjà confirmé (par le FSM caméra ou par un trigger
+        # manuel Loxone) — pas interrogé à répétition tant que le label est
+        # vu. min_duration suppose ce second cas : avec l'appel unique, une
+        # règle enabled avec min_duration>0 ne déclencherait donc jamais.
+        for label, rule in self._rules.items():
+            if rule.enabled and rule.min_duration > 0:
+                print(
+                    f"[rules] WARN [{label}].min_duration={rule.min_duration} "
+                    "n'a aucun effet avec le point d'appel actuel de "
+                    "should_trigger() (appelé une seule fois, trigger déjà "
+                    "confirmé) — seul cooldown est réellement appliqué."
+                )
+
     def _load_file(self) -> dict:
         with open(self.config_path, encoding="utf-8") as fh:
             if _YAML:
