@@ -52,6 +52,10 @@ class CardRecognizer:
         # de recognize() ni casser les appelants existants.
         self.last_score = 0.0
         self.last_card_id: str | None = None
+        # Métriques de coût du dernier appel — utile pour vérifier l'effet
+        # de hint_id (doit réduire drastiquement templates/images scannés).
+        self.last_templates_scanned = 0
+        self.last_images_scanned = 0
 
     def load_config(self, cfg: dict):
         det = cfg.get("detection", {})
@@ -72,6 +76,9 @@ class CardRecognizer:
             templates = [
                 t for t in self._templates if t.card_id == hint_id
             ] or self._templates
+
+        self.last_templates_scanned = len(templates)
+        self.last_images_scanned = sum(len(t.images) for t in templates)
 
         best_score, best_matches, best_id, best_img = 0.0, 0, None, ""
 

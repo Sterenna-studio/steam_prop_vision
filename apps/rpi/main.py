@@ -806,14 +806,26 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
             continue
 
         roi = quad.crop(frame)
+        l2_start = time.time()
         region = card_detector.detect(roi)
+        l2_ms = (time.time() - l2_start) * 1000
         if region is None:
             if consec_card_id is not None:
                 _reset_detection()
             _push_score(now, None, 0.0)
             continue
 
-        result = recognizer.recognize(region.warped)
+        # hint_id = candidat produit par L2 : borne L3 aux seules images de
+        # cette plaque au lieu de rescanner tout PLATEST à chaque frame.
+        hint_id = region.card_id
+        l3_start = time.time()
+        result = recognizer.recognize(region.warped, hint_id=hint_id)
+        l3_ms = (time.time() - l3_start) * 1000
+        log.debug(
+            f"[perf] L2={l2_ms:.1f}ms L3={l3_ms:.1f}ms hint_id={hint_id!r} "
+            f"templates={recognizer.last_templates_scanned} "
+            f"images={recognizer.last_images_scanned}"
+        )
         _push_score(now, recognizer.last_card_id, recognizer.last_score)
         if result is None:
             if consec_card_id is not None:
