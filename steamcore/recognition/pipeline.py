@@ -28,6 +28,7 @@ import numpy as np
 from .fast_detector import FastDetector, QuadROI
 from .card_detector import CardDetector
 from .card_recognizer import CardRecognizer
+from .template_registry import TemplateRegistry
 
 
 @dataclass
@@ -62,16 +63,21 @@ class RecognitionPipeline:
         self.result_ttl = result_ttl
 
         self._fast = FastDetector()
+        # Registre partagé : évite à CardDetector et CardRecognizer de
+        # relire/redécoder deux fois les mêmes images PLATEST au démarrage.
+        registry = TemplateRegistry(platest_dir)
         self._detector = CardDetector(
             platest_dir=platest_dir,
             backend=backend,
             min_matches=min_matches_l2,
             min_inliers=min_inliers,
             ratio_test=ratio_test,
+            registry=registry,
         )
         self._recognizer = CardRecognizer(
             platest_dir=platest_dir,
             threshold=orb_threshold,
+            registry=registry,
         )
 
         self._queue: Queue = Queue(maxsize=2)

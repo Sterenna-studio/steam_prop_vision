@@ -6,12 +6,13 @@ Travaille sur la ROI retournee par FastDetector.
 """
 
 from __future__ import annotations
-from pathlib import Path
 from dataclasses import dataclass
 import cv2
 import numpy as np
 
-from ._images import find_template_images as _find_images
+from .template_registry import TemplateRegistry
+
+_MIN_KEYPOINTS = 6
 
 
 @dataclass
@@ -37,12 +38,17 @@ class CardDetector:
         min_matches: int = 8,
         min_inliers: int = 6,
         ratio_test: float = 0.75,
+        registry: TemplateRegistry | None = None,
     ):
         self.platest_dir = platest_dir
         self.backend = backend.lower()
         self.min_matches = min_matches
         self.min_inliers = min_inliers
         self.ratio_test = ratio_test
+        # Registre partagé avec CardRecognizer si fourni (évite de relire les
+        # mêmes images PLATEST deux fois) — sinon un registre privé, non
+        # partagé, pour rester utilisable de façon autonome (tests, outils).
+        self._registry = registry or TemplateRegistry(platest_dir)
         self._templates: list = []
         self._build_matcher()
         self._load_templates()
@@ -58,10 +64,12 @@ class CardDetector:
 
     def _build_matcher(self):
         if self.backend == "sift":
-            self._feat = cv2.SIFT_create(nfeatures=800)
+            self._nfeatures = 800
+            self._feat = cv2.SIFT_create(nfeatures=self._nfeatures)
             self._matcher = cv2.BFMatcher(cv2.NORM_L2)
         else:
-            self._feat = cv2.ORB_create(nfeatures=600)
+            self._nfeatures = 600
+            self._feat = cv2.ORB_create(nfeatures=self._nfeatures)
             self._matcher = cv2.BFMatcher(cv2.NORM_HAMMING)
 
     # ── public ───────────────────────────────────────────────────────────────
@@ -81,6 +89,7 @@ class CardDetector:
         return best
 
     def reload(self):
+        self._registry.invalidate()
         self._templates.clear()
         self._load_templates()
 
@@ -91,26 +100,15 @@ class CardDetector:
     # ── private ──────────────────────────────────────────────────────────────
 
     def _load_templates(self):
-        p = Path(self.platest_dir)
-        if not p.exists():
-            print("[detector] PLATEST introuvable : " + str(p))
-            return
-        for subdir in sorted(p.iterdir()):
-            if not subdir.is_dir():
-                continue
-            imgs = _find_images(subdir)
-            if not imgs:
-                continue
-            tmpl = _Template(subdir.name, imgs, self._feat)
-            if tmpl.descs:
-                self._templates.append(tmpl)
-                print(
-                    "[detector] loaded "
-                    + subdir.name
-                    + " ("
-                    + str(len(tmpl.descs))
-                    + " imgs)"
-                )
+        cache_key = f"{self.backend}:{self._nfeatures}"
+        by_card = self._registry.get_templates(
+            self._feat, cache_key, resize=None, min_keypoints=_MIN_KEYPOINTS
+        )
+        for card_id, entries in by_card.items():
+            tmpl = _Template(card_id)
+            tmpl.descs = [(kps, desc, h, w) for (_name, kps, desc, h, w) in entries]
+            self._templates.append(tmpl)
+            print(f"[detector] loaded {card_id} ({len(tmpl.descs)} imgs)")
         print(
             "[detector] "
             + str(len(self._templates))
@@ -182,14 +180,8 @@ def _valid_quad(corners: np.ndarray, shape) -> bool:
 
 
 class _Template:
-    def __init__(self, card_id: str, paths, feat):
+    """Conteneur simple : le chargement réel passe par TemplateRegistry."""
+
+    def __init__(self, card_id: str):
         self.card_id = card_id
         self.descs: list = []
-        for p in paths:
-            img = cv2.imread(str(p))
-            if img is None:
-                continue
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            kps, desc = feat.detectAndCompute(gray, None)
-            if desc is not None and len(kps) >= 6:
-                self.descs.append((kps, desc, img.shape[0], img.shape[1]))

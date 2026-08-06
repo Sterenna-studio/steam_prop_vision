@@ -338,13 +338,13 @@ def run_dev(cam_type, cam, cfg, opts):
                 if desc_q is not None:
                     for t in recognizer._templates:
                         top_s, top_m = 0.0, 0
-                        for kps_r, desc_r in t.descs:
+                        for _img_name, kps_r, desc_r in t.images:
                             ms = matcher.knnMatch(desc_q, desc_r, k=2)
                             good = [m for m, n in ms if m.distance < 0.75 * n.distance]
                             s = len(good) / max(len(kps_r), len(kps_q), 1)
                             if s > top_s:
                                 top_s, top_m = s, len(good)
-                        scores.append((t.id, top_s, top_m))
+                        scores.append((t.card_id, top_s, top_m))
                     scores.sort(key=lambda x: -x[1])
                     last_scores = scores
 

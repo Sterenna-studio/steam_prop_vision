@@ -11,12 +11,14 @@ Logique de reconnaissance :
 """
 
 from __future__ import annotations
-from pathlib import Path
 from dataclasses import dataclass
 import cv2
 import numpy as np
 
-from ._images import find_template_images as _find_images
+from .template_registry import TemplateRegistry
+
+_NFEATURES = 800
+_MIN_KEYPOINTS = 4
 
 
 @dataclass
@@ -37,12 +39,17 @@ class CardRecognizer:
         platest_dir: str = "PLATEST",
         min_matches: int = 6,
         threshold: float = 0.03,
+        registry: TemplateRegistry | None = None,
     ):
         self.platest_dir = platest_dir
         self.min_matches = min_matches
         self.threshold = threshold
-        self._orb = cv2.ORB_create(nfeatures=800)
+        self._orb = cv2.ORB_create(nfeatures=_NFEATURES)
         self._matcher = cv2.BFMatcher(cv2.NORM_HAMMING)
+        # Registre partagé avec CardDetector si fourni (évite de relire les
+        # mêmes images PLATEST deux fois) — sinon un registre privé, non
+        # partagé, pour rester utilisable de façon autonome (tests, outils).
+        self._registry = registry or TemplateRegistry(platest_dir)
         self._templates: list = []
         self._load()
 
@@ -116,6 +123,7 @@ class CardRecognizer:
         )
 
     def reload(self):
+        self._registry.invalidate()
         self._templates.clear()
         self._load()
 
@@ -124,20 +132,15 @@ class CardRecognizer:
         return [t.card_id for t in self._templates]
 
     def _load(self):
-        p = Path(self.platest_dir)
-        if not p.exists():
-            print("[recognizer] PLATEST introuvable : " + str(p))
-            return
-        for subdir in sorted(p.iterdir()):
-            if not subdir.is_dir():
-                continue
-            imgs = _find_images(subdir)
-            if not imgs:
-                continue
-            tmpl = _OrbTemplate(subdir.name, imgs, self._orb)
-            if tmpl.images:
-                self._templates.append(tmpl)
-                print(f"[recognizer] {subdir.name} ({len(tmpl.images)} imgs)")
+        cache_key = f"orb:{_NFEATURES}"
+        by_card = self._registry.get_templates(
+            self._orb, cache_key, resize=self.WARP_SIZE, min_keypoints=_MIN_KEYPOINTS
+        )
+        for card_id, entries in by_card.items():
+            tmpl = _OrbTemplate(card_id)
+            tmpl.images = [(name, kps, desc) for (name, kps, desc, _h, _w) in entries]
+            self._templates.append(tmpl)
+            print(f"[recognizer] {card_id} ({len(tmpl.images)} imgs)")
         print(f"[recognizer] {len(self._templates)} cartes chargees")
 
     @staticmethod
@@ -146,18 +149,8 @@ class CardRecognizer:
 
 
 class _OrbTemplate:
-    """Charge toutes les images d'une plaque et stocke leurs descripteurs ORB."""
+    """Conteneur simple : le chargement réel passe par TemplateRegistry."""
 
-    def __init__(self, card_id: str, paths, orb):
+    def __init__(self, card_id: str):
         self.card_id = card_id
         self.images: list = []  # [(nom_fichier, kps, desc), ...]
-        S = CardRecognizer.WARP_SIZE
-        for p in paths:
-            img = cv2.imread(str(p))
-            if img is None:
-                continue
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            gray = cv2.resize(gray, (S, S))
-            kps, desc = orb.detectAndCompute(gray, None)
-            if desc is not None and len(kps) >= 4:
-                self.images.append((p.name, kps, desc))

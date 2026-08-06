@@ -57,6 +57,7 @@ from steamcore.udp import (
 from steamcore.recognition.fast_detector import FastDetector
 from steamcore.recognition.card_detector import CardDetector
 from steamcore.recognition.card_recognizer import CardRecognizer
+from steamcore.recognition.template_registry import TemplateRegistry
 from monitor.ws_bridge import start_in_thread as start_ws, push_event as _push_event_raw
 from monitor.rule_api import start_in_thread as start_rule_api
 
@@ -704,9 +705,18 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
     consec_required = cfg.get("card_consec_frames", 5)
 
     fast_detector = FastDetector(min_area=card_min_area)
-    card_detector = CardDetector()
+    # Registre partagé : L2 (CardDetector) et L3 (CardRecognizer) chargent
+    # les mêmes images PLATEST au démarrage — évite de les lire/décoder deux
+    # fois (voir steamcore/recognition/template_registry.py). Les
+    # descripteurs restent calculés séparément par backend+config (orb:600
+    # vs orb:800) : jamais mélangés.
+    template_registry = TemplateRegistry("PLATEST")
+    card_detector = CardDetector(registry=template_registry)
     recognizer = CardRecognizer(
-        "PLATEST", min_matches=card_min_match, threshold=card_threshold
+        "PLATEST",
+        min_matches=card_min_match,
+        threshold=card_threshold,
+        registry=template_registry,
     )
     qr_checker = QRFluxChecker(cfg.get("mission_id", ""))
 
