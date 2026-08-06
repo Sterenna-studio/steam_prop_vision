@@ -24,6 +24,7 @@ fichier `config.json` (format JSON, pas YAML) au lieu de `config/features.yaml` 
 | `run_builder.bat`, `build_builder_exe.bat`, `build_all_exe.bat` | Lancent/compilent `config_builder_app.py` |
 | `run.sh` | Ancien script de lancement Linux (`python3 -m gui.app`) — également cassé, même raison |
 | `run_v2.sh` | Autre ancien lanceur racine (`./run.sh [--debug\|--escape]`), appelait `main.py`/`gui_setup.py` — cassé depuis leur archivage ici (chemins relatifs à la racine du dépôt, plus valides depuis `legacy/`) |
+| `launcher_server.py`, `launcher_client.py` | GUIs Tkinter (avril 2026, branche `GUI` jamais fusionnée) — serveur : lance `scripts/linux_run.sh` avec des variables d'env `STEAM_CONFIG`/`STEAM_MODE` (modes `plaque`/`presence`/`yolo`, incompatibles avec `pipeline_mode: card/person` actuel) ; client : pilote STYX à distance via une API REST (`api/status`, `api/inject`, `api/config`) qui n'a **jamais existé dans ce dépôt sous cette forme** — elle correspondait à `app_flask.py`, supprimé au commit `c228ddc` (« suppression pipeline Flask/gui/core — unification sur apps/rpi/main.py »). Récupérés dans `legacy/` (uniquement pour traçabilité) plutôt que perdus avec la branche `GUI`. |
 
 ## Pourquoi archivé plutôt que supprimé
 
