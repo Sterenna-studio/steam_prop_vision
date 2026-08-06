@@ -15,20 +15,20 @@ Piloté par config/features.yaml
 ║  YOLO person détecté X secondes → lecture audio      ║
 ║  → retour IDLE après idle_after_s                    ║
 ╚══════════════════════════════════════════════════════╝
+
+Logique pure (dispatch d'actions, QR flux, watchdog, boot checks, page /view)
+vit dans apps/rpi/{actions,qr_flux,watchdog,boot,view}.py — sans dépendance
+picamera2, donc importable et testable hors Raspberry Pi. Ce fichier garde la
+boucle caméra elle-même (a besoin du matériel) et l'orchestration.
 """
 
 from __future__ import annotations
 import logging
 import logging.handlers
-import os
-import shutil
 import signal
-import subprocess
 import sys
 import time
 import threading
-import socketserver
-from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from enum import Enum, auto
 
@@ -39,8 +39,6 @@ from enum import Enum, auto
 # place dans tools/card_test.py, tools/plate_bench.py, tools/pipeline_test.py.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-import json
-
 import cv2
 import yaml
 from picamera2 import Picamera2
@@ -48,26 +46,19 @@ from picamera2 import Picamera2
 from steamcore.audio import AudioPlayer
 from steamcore.video_player import VideoPlayer
 from steamcore.rules import RuleEngine
-from steamcore.udp import (
-    send_event as udp_send_raw,
-    send_event_reliable,
-    HeartbeatThread,
-    UDPListener,
-)
+from steamcore.udp import HeartbeatThread, UDPListener
 from steamcore.recognition.fast_detector import FastDetector
 from steamcore.recognition.card_detector import CardDetector
 from steamcore.recognition.card_recognizer import CardRecognizer
 from steamcore.recognition.template_registry import TemplateRegistry
-from monitor.ws_bridge import start_in_thread as start_ws, push_event as _push_event_raw
+from monitor.ws_bridge import start_in_thread as start_ws
 from monitor.rule_api import start_in_thread as start_rule_api
 
-try:
-    from pyzbar.pyzbar import decode as _zbar_decode
-
-    _QR_BACKEND = "zbar"
-except ImportError:
-    _zbar_decode = None
-    _QR_BACKEND = "cv2"
+from apps.rpi.actions import run_actions, handle_loxone_command
+from apps.rpi.qr_flux import QRFluxChecker
+from apps.rpi.watchdog import Watchdog
+from apps.rpi.boot import boot_checks
+from apps.rpi.view import push_event, update_stream_frame, start_mjpeg_server
 
 CONFIG_FILE = "config/features.yaml"
 LOG_FILE = "logs/steam_vision.log"
@@ -77,87 +68,9 @@ LOG_FILE = "logs/steam_vision.log"
 # un bandeau dédié sur /view — sans déclencher UDP Loxone, vidéo ni audio.
 READY_CHECK_CARD_ID = "plate_ready_check"
 
-# QR de validation de flux/mission. Format attendu : "STEAM_FLUX:<mission_id>"
-# (ex: STEAM_FLUX:flux_1). Comparé à cfg["mission_id"] — lecture seule, ne
-# modifie jamais la config active.
-#
-# Décodage : pyzbar/ZBar en priorité (pip install pyzbar + apt install
-# libzbar0). cv2.QRCodeDetector (natif, sans dépendance) est utilisé en
-# repli, mais s'est montré peu fiable en pratique : il échoue de façon
-# reproductible sur certains QR pourtant valides (ex. contenu se terminant
-# par un chiffre impair dans nos tests) — voir DEPENDENCIES.md. À n'utiliser
-# que si pyzbar/libzbar0 ne peuvent pas être installés.
-QR_FLUX_PREFIX = "STEAM_FLUX:"
-QR_CHECK_EVERY = 5  # ne scanne le QR qu'une frame sur N (coût CPU)
-QR_REPEAT_COOLDOWN = 3.0  # s avant de repousser le même event pour le même QR
-
 # ── Monitoring /view (FPS + score continu) ──────────────────────────
 FPS_PUSH_INTERVAL = 1.0  # s entre deux mises à jour du compteur FPS
 SCORE_PUSH_INTERVAL = 0.3  # s entre deux mises à jour du score ORB en direct
-
-
-def _decode_qr(frame, cv2_detector) -> str | None:
-    """Décode un QR dans la frame (pyzbar si dispo, sinon cv2 en repli)."""
-    if _zbar_decode is not None:
-        results = _zbar_decode(frame)
-        return results[0].data.decode("utf-8", errors="ignore") if results else None
-    data, _, _ = cv2_detector.detectAndDecode(frame)
-    return data or None
-
-
-class QRFluxChecker:
-    """Scan QR de validation de flux/mission (1 frame sur QR_CHECK_EVERY).
-
-    Lecture seule : compare le flux scanné à mission_id, ne modifie jamais la
-    config active. check() retourne l'event à pousser sur le monitor WS
-    (system_ready / flux_mismatch), ou None si rien à signaler.
-    """
-
-    def __init__(self, mission_id: str):
-        self.mission_id = mission_id
-        self._cv2_detector = cv2.QRCodeDetector()  # utilisé si pyzbar absent
-        self._last_payload: str | None = None
-        self._last_time = 0.0
-        log.info(f"[qr] Backend décodage : {_QR_BACKEND}")
-        if _QR_BACKEND != "zbar":
-            log.warning(
-                "[qr] pyzbar/libzbar0 absent — repli sur cv2.QRCodeDetector, "
-                "moins fiable (voir DEPENDENCIES.md). "
-                "Installer : sudo apt install libzbar0 && pip install pyzbar"
-            )
-
-    def check(self, frame, frame_count: int, now: float) -> dict | None:
-        if frame_count % QR_CHECK_EVERY != 0:
-            return None
-        data = _decode_qr(frame, self._cv2_detector)
-        if not data or not data.startswith(QR_FLUX_PREFIX):
-            return None
-
-        flux_id = data[len(QR_FLUX_PREFIX) :]
-        repeat = (
-            flux_id == self._last_payload
-            and (now - self._last_time) < QR_REPEAT_COOLDOWN
-        )
-        if repeat:
-            return None
-        self._last_payload = flux_id
-        self._last_time = now
-
-        if flux_id == self.mission_id:
-            log.info(f"[qr] Flux valide : {flux_id}")
-            return {
-                "type": "system_ready",
-                "label": f"STEAM VISION READY — {flux_id.upper()}",
-            }
-        log.warning(
-            f"[qr] Flux inattendu : scanné={flux_id!r} attendu={self.mission_id!r}"
-        )
-        return {
-            "type": "flux_mismatch",
-            "expected": self.mission_id,
-            "scanned": flux_id,
-        }
-
 
 # ── Orientation caméra ───────────────────────────────────────────────
 # camera_rotation dans features.yaml (0/90/180/270) corrige le montage
@@ -173,351 +86,6 @@ _ROTATE_MAP = {
 def _rotate_frame(frame, rotation: int):
     code = _ROTATE_MAP.get(rotation)
     return cv2.rotate(frame, code) if code is not None else frame
-
-
-# ── MJPEG stream (optionnel, thread daemon) ────────────────────────
-_stream_frame: bytes | None = None
-_stream_lock = threading.Lock()
-_stream_last_update: float = 0.0
-
-
-def _update_stream_frame(frame, fps_limit: float = 20.0) -> None:
-    """Encode la frame courante en JPEG et la partage avec le serveur MJPEG.
-    Throttlé à fps_limit pour ne pas impacter le pipeline principal."""
-    global _stream_frame, _stream_last_update
-    now = time.time()
-    if now - _stream_last_update < 1.0 / fps_limit:
-        return
-    _stream_last_update = now
-    try:
-        ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
-        if ok:
-            with _stream_lock:
-                _stream_frame = buf.tobytes()
-    except Exception:
-        pass
-
-
-class _ThreadedHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
-    daemon_threads = True
-
-
-def _start_mjpeg_server(port: int = 5050) -> None:
-    """Démarre un serveur MJPEG minimal en thread daemon.
-    Si ça plante, le pipeline principal continue sans le stream."""
-
-    class Handler(BaseHTTPRequestHandler):
-        def log_message(self, *args):
-            pass  # silence logs HTTP
-
-        def do_GET(self):
-            if self.path in ("/", "/view"):
-                body = _VIEW_HTML
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-            elif self.path == "/api/status":
-                with _view_lock:
-                    data = dict(_view_status)
-                body = json.dumps(data).encode()
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-            elif self.path == "/stream":
-                self.send_response(200)
-                self.send_header(
-                    "Content-Type", "multipart/x-mixed-replace; boundary=frame"
-                )
-                self.end_headers()
-                try:
-                    while True:
-                        with _stream_lock:
-                            data = _stream_frame
-                        if data is None:
-                            time.sleep(0.05)
-                            continue
-                        self.wfile.write(
-                            b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
-                            + data
-                            + b"\r\n"
-                        )
-                        time.sleep(0.05)  # ~20 fps côté client
-                except Exception:
-                    pass
-            else:
-                self.send_response(404)
-                self.end_headers()
-
-    def _run():
-        try:
-            srv = _ThreadedHTTPServer(("0.0.0.0", port), Handler)
-            log.info(f"[stream] MJPEG  →  http://0.0.0.0:{port}/stream")
-            srv.serve_forever()
-        except Exception as e:
-            log.warning(f"[stream] Désactivé — {e}")
-
-    threading.Thread(target=_run, daemon=True, name="mjpeg-stream").start()
-
-
-# ── View status (partagé pipeline → HTTP) ─────────────────────────
-_view_status: dict = {
-    "fsm": "IDLE",
-    "card_id": None,
-    "card_label": None,
-    "hold_pct": 0,
-}
-_view_lock = threading.Lock()
-
-
-# ── Watchdog anti-freeze ─────────────────────────────────────────────
-# systemd (Restart=on-failure) ne relance que si le PROCESS meurt. Si la
-# boucle principale se fige (ex: appel caméra/IPC bloqué) sans faire mourir
-# le process, rien ne le détecte. Ce watchdog force un os._exit(1) si aucune
-# itération de la boucle n'a "touché" _last_alive depuis watchdog_timeout_s
-# — systemd relance alors normalement.
-_last_alive = time.time()
-_alive_lock = threading.Lock()
-
-
-def _touch_alive() -> None:
-    global _last_alive
-    with _alive_lock:
-        _last_alive = time.time()
-
-
-def _watchdog_loop(timeout_s: float) -> None:
-    while True:
-        time.sleep(5.0)
-        with _alive_lock:
-            stale = time.time() - _last_alive
-        if stale > timeout_s:
-            log.error(
-                f"[watchdog] Boucle principale figée depuis {stale:.0f}s "
-                "-> arrêt forcé (systemd relancera)"
-            )
-            os._exit(1)
-
-
-# ── Commandes entrantes Loxone (voir LOXONE.md) ─────────────────────
-# Positionné par _handle_loxone_command() sur réception de STEAM_RESET,
-# vérifié à chaque itération des boucles run_card_mode()/run_person_mode().
-_force_reset = threading.Event()
-
-
-def _handle_loxone_command(msg, addr, cfg, rule_engine, audio, video) -> None:
-    """Dispatche les commandes reçues de Loxone sur udp_listen_port."""
-    log.info("[UDP RX] " + addr[0] + " -> " + msg)
-    push_event({"type": "udp_rx", "msg": msg, "from": addr[0]})
-
-    if msg == "STEAM_PING":
-        udp_send_raw("STEAM_PONG", addr[0], cfg.get("loxone_port", 7777))
-    elif msg == "STEAM_RESET":
-        log.info("[loxone] STEAM_RESET reçu -> retour IDLE forcé")
-        _force_reset.set()
-    elif msg.startswith("STEAM_TRIGGER:"):
-        card_id = msg[len("STEAM_TRIGGER:") :]
-        log.info(f"[loxone] STEAM_TRIGGER reçu -> {card_id}")
-        threading.Thread(
-            target=run_actions,
-            args=(cfg, rule_engine, card_id, audio, video),
-            daemon=True,
-            name="loxone-trigger",
-        ).start()
-
-
-def push_event(event: dict) -> None:
-    """Transmet l'event au WebSocket ET met à jour le statut view."""
-    _push_event_raw(event)
-    t = event.get("type")
-    if t == "state":
-        st = event.get("state", "")
-        with _view_lock:
-            _view_status["fsm"] = st
-            if st == "IDLE":
-                _view_status["card_id"] = None
-                _view_status["card_label"] = None
-                _view_status["hold_pct"] = 0
-    elif t == "card_detected":
-        with _view_lock:
-            _view_status["card_id"] = event.get("card_id")
-            _view_status["card_label"] = event.get("label")
-    elif t == "hold":
-        with _view_lock:
-            _view_status["hold_pct"] = event.get("pct", 0)
-
-
-# ── Page /view ─────────────────────────────────────────────────────
-_VIEW_HTML = b"""<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>S.T.E.A.M \xe2\x80\x94 View</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:#000;color:#fff;font-family:monospace;height:100vh;display:flex;flex-direction:column;overflow:hidden}
-#wrap{flex:1;position:relative;overflow:hidden;background:#111}
-#stream{width:100%;height:100%;object-fit:contain;display:block}
-#hold{position:absolute;bottom:14px;left:5%;right:5%;display:none}
-#hold-track{background:rgba(255,255,255,.15);border-radius:6px;height:8px;overflow:hidden}
-#hold-fill{height:8px;background:#00e5cc;border-radius:6px;width:0%;transition:width .1s linear}
-#hold-txt{text-align:center;margin-top:5px;font-size:13px;color:#00e5cc;text-shadow:0 0 8px #00e5cc}
-#standby{position:absolute;inset:0;background:rgba(0,0,0,.78);display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px}
-#standby .icon{font-size:72px;color:#00e5cc;text-shadow:0 0 40px #00e5cc88}
-#standby .name{font-size:clamp(18px,3vw,32px);letter-spacing:.12em}
-#standby .sub{font-size:13px;color:#888;letter-spacing:.08em}
-.banner{position:absolute;inset:0;background:rgba(0,0,0,.85);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px}
-.banner .check{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px}
-.banner .txt{font-size:clamp(15px,2.6vw,26px);letter-spacing:.06em;font-weight:bold}
-.banner .sub{font-size:11px;letter-spacing:.05em}
-.banner.ok .check{background:#0d2318;border:2px solid #4caf50;color:#4caf50}
-.banner.ok .txt{color:#4caf50}
-.banner.ok .sub{color:#666}
-.banner.warn .check{background:#2b1710;border:2px solid #ff9800;color:#ff9800}
-.banner.warn .txt{color:#ff9800}
-.banner.warn .sub{color:#999}
-#bar{height:44px;background:rgba(0,0,0,.92);border-top:1px solid #1a1a1a;display:flex;align-items:center;padding:0 18px;gap:20px;font-size:12px}
-.badge{padding:2px 9px;border-radius:3px;font-weight:bold;letter-spacing:.08em;font-size:11px}
-#fsm-b{background:#222;color:#666}
-#fsm-b.idle{background:#0d1f0d;color:#4caf50}
-#fsm-b.standby{background:#001f1f;color:#00e5cc}
-#card-d{color:#bbb}
-#fps-d{color:#555;font-variant-numeric:tabular-nums}
-#ws-d{margin-left:auto;font-size:10px;color:#444}
-#ws-d.ok{color:#4caf50}
-#ws-d.err{color:#e53935}
-#score{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.55);padding:4px 10px;border-radius:4px;font-size:12px;color:#666;letter-spacing:.03em;font-variant-numeric:tabular-nums}
-#score.hit{color:#00e5cc}
-#history{position:absolute;top:10px;right:10px;background:rgba(0,0,0,.55);border-radius:4px;padding:6px 10px;font-size:11px;max-width:190px}
-#history .h-title{color:#555;font-size:9px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
-#history .h-item{display:flex;justify-content:space-between;gap:10px;color:#bbb;padding:2px 0}
-#history .h-time{color:#555;font-size:10px;font-variant-numeric:tabular-nums}
-</style>
-</head>
-<body>
-<div id="wrap">
-  <img id="stream" src="/stream" alt="">
-  <div id="score">score: \xe2\x80\x94</div>
-  <div id="history">
-    <div class="h-title">Historique</div>
-    <div id="history-list"></div>
-  </div>
-  <div id="hold">
-    <div id="hold-track"><div id="hold-fill"></div></div>
-    <div id="hold-txt"></div>
-  </div>
-  <div id="standby">
-    <div class="icon">&#9654;</div>
-    <div class="name" id="sb-name">\xe2\x80\x94</div>
-    <div class="sub">en cours de lecture</div>
-  </div>
-  <div id="ready" class="banner ok">
-    <div class="check">&#10003;</div>
-    <div class="txt" id="ready-txt">STEAM VISION READY</div>
-    <div class="sub">CAM&Eacute;RA &middot; D&Eacute;TECTION &middot; RECONNAISSANCE &mdash; OK</div>
-  </div>
-  <div id="mismatch" class="banner warn">
-    <div class="check">&#33;</div>
-    <div class="txt">FLUX INATTENDU</div>
-    <div class="sub" id="mismatch-sub">&mdash;</div>
-  </div>
-</div>
-<div id="bar">
-  <span>FSM&nbsp;<span id="fsm-b" class="badge idle">IDLE</span></span>
-  <span id="card-d">\xe2\x80\x94</span>
-  <span id="fps-d">\xe2\x80\x94 fps</span>
-  <span id="ws-d">&#9679; ws\xe2\x80\xa6</span>
-</div>
-<script>
-const $=id=>document.getElementById(id);
-const fsmEl=$('fsm-b'),cardEl=$('card-d'),wsEl=$('ws-d'),fpsEl=$('fps-d');
-const holdEl=$('hold'),holdFill=$('hold-fill'),holdTxt=$('hold-txt');
-const sbEl=$('standby'),sbName=$('sb-name');
-const readyEl=$('ready'),readyTxt=$('ready-txt');
-const mismatchEl=$('mismatch'),mismatchSub=$('mismatch-sub');
-const scoreEl=$('score'),historyListEl=$('history-list');
-const history=[];
-
-function flash(el,ms){
-  el.style.display='flex';
-  clearTimeout(el._t);
-  el._t=setTimeout(()=>{el.style.display='none';},ms||4000);
-}
-function fsm(s){
-  fsmEl.textContent=s;
-  fsmEl.className='badge '+(s==='STANDBY'?'standby':'idle');
-}
-function pad2(n){return String(n).padStart(2,'0');}
-function nowHMS(){
-  const d=new Date();
-  return pad2(d.getHours())+':'+pad2(d.getMinutes())+':'+pad2(d.getSeconds());
-}
-function pushHistory(label){
-  history.unshift({label:label,time:nowHMS()});
-  history.length=Math.min(history.length,6);
-  historyListEl.innerHTML=history.map(h=>
-    '<div class="h-item"><span>'+h.label+'</span><span class="h-time">'+h.time+'</span></div>'
-  ).join('');
-}
-function handle(ev){
-  if(ev.type==='state'){
-    fsm(ev.state);
-    if(ev.state==='STANDBY'){sbEl.style.display='flex';holdEl.style.display='none';}
-    else{sbEl.style.display='none';if(ev.state==='IDLE'){holdEl.style.display='none';cardEl.textContent='\xe2\x80\x94';}}
-  }else if(ev.type==='card_detected'){
-    cardEl.textContent=ev.label;sbName.textContent=ev.label;
-    pushHistory(ev.label);
-  }else if(ev.type==='fps'){
-    fpsEl.textContent=ev.value.toFixed(1)+' fps';
-  }else if(ev.type==='score'){
-    if(ev.card_id){
-      scoreEl.textContent=ev.card_id.replace('plate_','')+': '+ev.score.toFixed(3);
-      scoreEl.className='hit';
-    }else if(ev.score>0){
-      scoreEl.textContent='score: '+ev.score.toFixed(3);
-      scoreEl.className='';
-    }else{
-      scoreEl.textContent='score: \xe2\x80\x94';
-      scoreEl.className='';
-    }
-  }else if(ev.type==='hold'){
-    holdEl.style.display='block';
-    holdFill.style.width=ev.pct+'%';
-    holdTxt.textContent=ev.label+'  '+ev.pct+'%';
-    cardEl.textContent=ev.label;
-  }else if(ev.type==='system_ready'){
-    holdEl.style.display='none';
-    cardEl.textContent='\xe2\x80\x94';
-    readyTxt.textContent=ev.label||'STEAM VISION READY';
-    flash(readyEl);
-  }else if(ev.type==='flux_mismatch'){
-    holdEl.style.display='none';
-    cardEl.textContent='\xe2\x80\x94';
-    mismatchSub.textContent='attendu '+(ev.expected||'?')+' \xe2\x80\x94 re\xc3\xa7u '+(ev.scanned||'?');
-    flash(mismatchEl);
-  }
-}
-function connect(){
-  const ws=new WebSocket('ws://'+location.hostname+':8889');
-  ws.onopen=()=>{wsEl.textContent='\xe2\x97\x8f connect\xc3\xa9';wsEl.className='ok';};
-  ws.onclose=()=>{wsEl.textContent='\xe2\x97\x8b reconnexion\xe2\x80\xa6';wsEl.className='err';setTimeout(connect,3000);};
-  ws.onerror=()=>ws.close();
-  ws.onmessage=e=>{try{handle(JSON.parse(e.data));}catch(_){}};
-}
-fetch('/api/status').then(r=>r.json()).then(s=>{
-  fsm(s.fsm||'IDLE');
-  if(s.card_label){cardEl.textContent=s.card_label;sbName.textContent=s.card_label;}
-  if(s.fsm==='STANDBY'){sbEl.style.display='flex';}
-}).catch(()=>{});
-connect();
-</script>
-</body>
-</html>
-"""
 
 
 # ── Logging ────────────────────────────────────────────────────────
@@ -554,140 +122,38 @@ def load_config():
         return yaml.safe_load(f) or {}
 
 
-# ── Boot checks ────────────────────────────────────────────────────
-
-
-def _kill_orphan_players():
-    """Tue les mpv/ffplay orphelins d'un crash précédent (best-effort).
-
-    Un crash brutal du process principal (SIGKILL, freeze -> watchdog) laisse
-    le sous-processus mpv/ffplay tourner indépendamment (reparenté à init) :
-    sans ce nettoyage, il continue d'afficher/boucler par-dessus la nouvelle
-    instance qui redémarre.
-    """
-    if not shutil.which("pkill"):
-        return
-    for name in ("mpv", "ffplay"):
-        try:
-            subprocess.run(
-                ["pkill", "-x", name],
-                check=False,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-        except Exception as e:
-            log.warning(f"[boot] pkill {name} : {e}")
-
-
-def boot_checks():
-    """Vérifie les dépendances critiques au démarrage. Abort si manquant."""
-    _kill_orphan_players()
-    errors = []
-
-    # Lecteur vidéo
-    players = ["mpv", "ffplay", "vlc"]
-    if not any(shutil.which(p) for p in players):
-        errors.append(
-            "Aucun lecteur vidéo trouvé (mpv / ffplay / vlc). "
-            "Installer avec : sudo apt install mpv"
-        )
-    else:
-        found = next(p for p in players if shutil.which(p))
-        log.info(f"[boot] Lecteur vidéo : {found} OK")
-
-    # aplay pour l'audio
-    if not shutil.which("aplay") and not shutil.which("mpg123"):
-        log.warning("[boot] WARN : aplay et mpg123 introuvables — audio désactivé")
-
-    # PLATEST
-    if not Path("PLATEST").exists() or not any(Path("PLATEST").iterdir()):
-        errors.append("Dossier PLATEST vide ou absent — aucun template de plate.")
-    else:
-        plates = [d for d in Path("PLATEST").iterdir() if d.is_dir()]
-        log.info(f"[boot] PLATEST : {len(plates)} plate(s) trouvée(s)")
-
-    # config/rules.yaml
-    if not Path("config/rules.yaml").exists():
-        log.warning(
-            "[boot] WARN : config/rules.yaml absent — aucune action ne sera déclenchée"
-        )
-
-    if errors:
-        for e in errors:
-            log.error(f"[boot] ERREUR CRITIQUE : {e}")
-        log.error("[boot] Démarrage annulé.")
-        sys.exit(1)
-
-
 class State(Enum):
     IDLE = auto()
     STANDBY = auto()  # vidéo en cours — aucune détection
 
 
-# ── Helpers ───────────────────────────────────────────────────────
+# ── Helpers de boucle partagés card/person ─────────────────────────
 
 
-def udp_send(msg, ip, port):
-    """Envoie UDP (ACK+retry en tâche de fond, non-bloquant) + event WS."""
-    push_event({"type": "udp_sent", "msg": msg, "ip": ip, "port": port})
+class _RunFlag:
+    """Installe SIGINT/SIGTERM et expose .running — partagé par les deux
+    boucles (run_card_mode/run_person_mode), qui avaient chacune leur propre
+    copie du même couple running/nonlocal/_stop."""
 
-    def _send():
-        try:
-            ok = send_event_reliable(msg, ip, port)
-        except Exception as e:
-            log.error("[udp] ERREUR : " + str(e))
-            ok = False
-        if not ok:
-            push_event({"type": "udp_ack_failed", "msg": msg, "ip": ip, "port": port})
+    def __init__(self):
+        self.running = True
 
-    threading.Thread(target=_send, daemon=True, name="udp-send").start()
+    def install_signal_handlers(self) -> None:
+        def _stop(sig, frame):
+            self.running = False
+            log.info("[stop] Arret propre...")
+
+        signal.signal(signal.SIGINT, _stop)
+        signal.signal(signal.SIGTERM, _stop)
 
 
-def run_actions(cfg, rule_engine, label_or_result, audio, video, card_id=None):
-    """
-    Dispatche les actions d'une règle (carte ou person).
-    label_or_result : RecognitionResult (mode card) ou str (mode person).
-    """
-    lox_ip = cfg.get("loxone_ip", "192.168.1.50")
-    lox_port = cfg.get("loxone_port", 7777)
-
-    if hasattr(label_or_result, "card_id"):
-        cid = label_or_result.card_id
-    else:
-        cid = label_or_result
-
-    actions = rule_engine.get_actions(cid)
-    if not actions:
-        msg = "STEAM_DETECT_" + cid.upper()
-        udp_send(msg, lox_ip, lox_port)
-        return
-
-    for action in actions:
-        if action.type == "audio" and cfg.get("enable_audio", True):
-            threading.Thread(
-                target=audio.play_random, args=(action.subdir,), daemon=True
-            ).start()
-            push_event({"type": "audio", "card": cid, "subdir": action.subdir})
-
-        elif action.type == "video" and cfg.get("enable_video", True):
-            threading.Thread(
-                target=video.play_random, args=(action.subdir,), daemon=True
-            ).start()
-            push_event({"type": "video", "card": cid, "subdir": action.subdir})
-
-        elif action.type == "image" and cfg.get("enable_video", True):
-            from steamcore.image_player import ImagePlayer
-
-            threading.Thread(
-                target=ImagePlayer("assets/img").show_random,
-                args=(action.subdir,),
-                daemon=True,
-            ).start()
-            push_event({"type": "image", "card": cid, "subdir": action.subdir})
-
-        elif action.type == "udp":
-            msg = action.message or ("STEAM_DETECT_" + cid.upper())
-            udp_send(msg, lox_ip, lox_port)
+def _apply_force_reset(video, audio, reset_fn) -> None:
+    """Remet à IDLE sur réception de STEAM_RESET (voir apps/rpi/actions.py)."""
+    video.stop()
+    audio.stop()
+    reset_fn()
+    log.info("[state] -> IDLE (reset Loxone)")
+    push_event({"type": "state", "state": "IDLE"})
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -695,7 +161,7 @@ def run_actions(cfg, rule_engine, label_or_result, audio, video, card_id=None):
 # ══════════════════════════════════════════════════════════════════
 
 
-def run_card_mode(cfg, cam, rule_engine, audio, video):
+def run_card_mode(cfg, cam, rule_engine, audio, video, watchdog, force_reset):
     card_hold_ms = cfg.get("card_hold_ms", 1000)
     idle_after_s = cfg.get("idle_after_s", 3.0)
     card_min_area = cfg.get("card_min_area", 4000)
@@ -741,15 +207,8 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
     )
     push_event({"type": "state", "state": "IDLE"})
 
-    running = True
-
-    def _stop(s, f):
-        nonlocal running
-        running = False
-        log.info("[stop] Arret propre...")
-
-    signal.signal(signal.SIGINT, _stop)
-    signal.signal(signal.SIGTERM, _stop)
+    flag = _RunFlag()
+    flag.install_signal_handlers()
 
     def _reset_detection():
         nonlocal hold_card_id, hold_start, consec_card_id, consec_count
@@ -765,15 +224,15 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
         last_score_push = now
         push_event({"type": "score", "card_id": card_id, "score": round(score, 3)})
 
-    while running:
+    while flag.running:
         frame = cam.capture_array()
         if frame is None:
             time.sleep(0.01)
             continue
-        _touch_alive()
+        watchdog.touch()
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         frame = _rotate_frame(frame, camera_rotation)
-        _update_stream_frame(frame)
+        update_stream_frame(frame)
         frame_count += 1
         now = time.time()
 
@@ -784,14 +243,10 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
             fps_count = 0
             fps_last_push = now
 
-        if _force_reset.is_set():
-            _force_reset.clear()
-            video.stop()
-            audio.stop()
+        if force_reset.is_set():
+            force_reset.clear()
+            _apply_force_reset(video, audio, _reset_detection)
             state = State.IDLE
-            _reset_detection()
-            log.info("[state] -> IDLE (reset Loxone)")
-            push_event({"type": "state", "state": "IDLE"})
             continue
 
         if state == State.STANDBY:
@@ -919,7 +374,7 @@ def run_card_mode(cfg, cam, rule_engine, audio, video):
 # ══════════════════════════════════════════════════════════════════
 
 
-def run_person_mode(cfg, cam, rule_engine, audio, video):
+def run_person_mode(cfg, cam, rule_engine, audio, video, watchdog, force_reset):
     from steamcore.detector import YOLODetector
     from steamcore.person_tracker import PersonTracker
 
@@ -947,36 +402,25 @@ def run_person_mode(cfg, cam, rule_engine, audio, video):
     log.info("[person] Pipeline person — IDLE (duration=" + str(person_duration) + "s)")
     push_event({"type": "state", "state": "IDLE"})
 
-    running = True
+    flag = _RunFlag()
+    flag.install_signal_handlers()
 
-    def _stop(s, f):
-        nonlocal running
-        running = False
-        log.info("[stop] Arret propre...")
-
-    signal.signal(signal.SIGINT, _stop)
-    signal.signal(signal.SIGTERM, _stop)
-
-    while running:
+    while flag.running:
         frame = cam.capture_array()
         if frame is None:
             time.sleep(0.01)
             continue
-        _touch_alive()
+        watchdog.touch()
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         frame = _rotate_frame(frame, camera_rotation)
-        _update_stream_frame(frame)
+        update_stream_frame(frame)
         frame_count += 1
         now = time.time()
 
-        if _force_reset.is_set():
-            _force_reset.clear()
-            video.stop()
-            audio.stop()
+        if force_reset.is_set():
+            force_reset.clear()
+            _apply_force_reset(video, audio, tracker.reset)
             state = State.IDLE
-            tracker.reset()
-            log.info("[state] -> IDLE (reset Loxone)")
-            push_event({"type": "state", "state": "IDLE"})
             continue
 
         if state == State.STANDBY:
@@ -1055,28 +499,25 @@ def main():
     rule_engine = RuleEngine("config/rules.yaml")
     audio = AudioPlayer("assets/audio")
     video = VideoPlayer("assets/video")
+    force_reset = threading.Event()
+    watchdog = Watchdog(watchdog_timeout_s)
 
     if monitor_on:
         start_ws()
     if rule_api_on:
         start_rule_api(engine=rule_engine)
     if stream_on:
-        _start_mjpeg_server(port=stream_port)
+        start_mjpeg_server(port=stream_port)
     if heartbeat_on:
         HeartbeatThread(interval=5.0).start()
     if watchdog_on:
-        _touch_alive()
-        threading.Thread(
-            target=_watchdog_loop,
-            args=(watchdog_timeout_s,),
-            daemon=True,
-            name="watchdog",
-        ).start()
+        watchdog.touch()
+        watchdog.start()
 
     UDPListener(
         port=listen_port,
-        on_message=lambda msg, addr: _handle_loxone_command(
-            msg, addr, cfg, rule_engine, audio, video
+        on_message=lambda msg, addr: handle_loxone_command(
+            msg, addr, cfg, rule_engine, audio, video, force_reset
         ),
     ).start()
 
@@ -1093,9 +534,9 @@ def main():
     log.info("[init] Camera OK")
 
     if pipeline_mode == "person":
-        run_person_mode(cfg, cam, rule_engine, audio, video)
+        run_person_mode(cfg, cam, rule_engine, audio, video, watchdog, force_reset)
     else:
-        run_card_mode(cfg, cam, rule_engine, audio, video)
+        run_card_mode(cfg, cam, rule_engine, audio, video, watchdog, force_reset)
 
     cam.stop()
     audio.stop()
