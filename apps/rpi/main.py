@@ -175,7 +175,8 @@ def run_card_mode(cfg, cam, rule_engine, audio, video, image, watchdog, force_re
     card_min_match = cfg.get("card_min_matches", 12)
     card_threshold = cfg.get("card_score_threshold", 0.20)
     camera_rotation = cfg.get("camera_rotation", 0)
-    consec_required = cfg.get("card_consec_frames", 5)
+    consec_required = cfg.get("card_consec_frames", 1)
+    miss_grace = cfg.get("card_miss_grace_frames", 3)
 
     fast_detector = FastDetector(min_area=card_min_area)
     # Registre partagé : L2 (CardDetector) et L3 (CardRecognizer) chargent
@@ -199,6 +200,7 @@ def run_card_mode(cfg, cam, rule_engine, audio, video, image, watchdog, force_re
     hold_start = 0.0
     consec_card_id = None
     consec_count = 0
+    miss_count = 0
     frame_count = 0
 
     fps_count = 0
@@ -210,6 +212,8 @@ def run_card_mode(cfg, cam, rule_engine, audio, video, image, watchdog, force_re
         + str(card_hold_ms)
         + "ms, consec="
         + str(consec_required)
+        + ", miss_grace="
+        + str(miss_grace)
         + ")"
     )
     push_event({"type": "state", "state": "IDLE"})
@@ -217,11 +221,27 @@ def run_card_mode(cfg, cam, rule_engine, audio, video, image, watchdog, force_re
     flag = _RunFlag()
 
     def _reset_detection():
-        nonlocal hold_card_id, hold_start, consec_card_id, consec_count
+        nonlocal hold_card_id, hold_start, consec_card_id, consec_count, miss_count
         hold_card_id = None
         hold_start = 0.0
         consec_card_id = None
         consec_count = 0
+        miss_count = 0
+
+    def _register_miss():
+        """Frame sans détection valide (L1/L2/L3 en échec). Tolère jusqu'à
+        miss_grace frames ratées d'affilée sans perdre le progrès déjà
+        accumulé — une frame isolée de bruit caméra ne doit pas jeter
+        plusieurs centaines de ms de hold déjà validées. held_ms reste basé
+        sur l'horloge murale (hold_start ne bouge pas ici) : les frames
+        ratées tolérées ne rallongent pas artificiellement le hold, elles
+        laissent juste le temps continuer à s'écouler."""
+        nonlocal miss_count
+        if consec_card_id is None:
+            return
+        miss_count += 1
+        if miss_count > miss_grace:
+            _reset_detection()
 
     def _push_score(now, card_id, score):
         nonlocal last_score_push
@@ -270,8 +290,7 @@ def run_card_mode(cfg, cam, rule_engine, audio, video, image, watchdog, force_re
 
         quad = fast_detector.detect(frame)
         if quad is None:
-            if consec_card_id is not None:
-                _reset_detection()
+            _register_miss()
             _push_score(now, None, 0.0)
             continue
 
@@ -280,8 +299,7 @@ def run_card_mode(cfg, cam, rule_engine, audio, video, image, watchdog, force_re
         region = card_detector.detect(roi)
         l2_ms = (time.time() - l2_start) * 1000
         if region is None:
-            if consec_card_id is not None:
-                _reset_detection()
+            _register_miss()
             _push_score(now, None, 0.0)
             continue
 
@@ -298,17 +316,21 @@ def run_card_mode(cfg, cam, rule_engine, audio, video, image, watchdog, force_re
         )
         _push_score(now, recognizer.last_card_id, recognizer.last_score)
         if result is None:
-            if consec_card_id is not None:
-                _reset_detection()
+            _register_miss()
             continue
 
         if result.card_id != consec_card_id:
+            # Carte différente reconnue avec confiance : changement réel,
+            # traité immédiatement (pas de tolérance ici, contrairement aux
+            # "pas de détection" — voir _register_miss()).
             consec_card_id = result.card_id
             consec_count = 1
             hold_card_id = None
             hold_start = 0.0
+            miss_count = 0
             continue
 
+        miss_count = 0  # bonne frame -> le compteur de ratées repart à zéro
         consec_count += 1
         if consec_count < consec_required:
             continue

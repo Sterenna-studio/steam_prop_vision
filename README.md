@@ -77,6 +77,14 @@ Boucle IDLE → Scan carte L1(FastDetector)→L2(CardDetector)→L3(CardRecogniz
 Pas de vérification de présence joueur (YOLO) dans ce mode — uniquement piloté
 par la détection de carte.
 
+`card_miss_grace_frames` (défaut 3) : pendant le hold, une frame sans
+détection valide (L1/L2/L3) ne réinitialise plus tout immédiatement — le
+hold survit à quelques frames de bruit caméra isolées. `hold_start` ne
+bouge pas pendant ces frames tolérées : la durée de hold reste basée sur
+l'horloge murale, pas rallongée artificiellement. Un changement de carte
+réel (ID différent reconnu avec confiance), lui, reste traité
+immédiatement — cette tolérance ne s'applique qu'à l'absence de détection.
+
 ### Mode `person` (`pipeline_mode: "person"`)
 
 ```
@@ -124,7 +132,8 @@ paramètres :
 | `pipeline_mode` | `"card"` | `"card"` ou `"person"` |
 | `card_hold_ms` | `1000` | ms de maintien de la carte avant déclenchement |
 | `idle_after_s` | `3.0` | secondes avant retour en IDLE après trigger |
-| `card_consec_frames` | `5` | frames consécutives pour confirmer la carte |
+| `card_consec_frames` | `1` | frames consécutives pour démarrer le hold — L2+L3 vérifient déjà géométrie+score, 1 frame suffit |
+| `card_miss_grace_frames` | `3` | frames ratées d'affilée tolérées pendant le hold sans tout reset (bruit caméra isolé) |
 | `person_duration` | `2.0` | secondes de présence avant déclenchement (mode person) |
 | `persist_after_loss` | `5.0` | persistance joueur après disparition (mode person) |
 | `card_min_matches` | `12` | keypoints ORB minimum pour valider |

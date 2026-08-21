@@ -25,7 +25,8 @@ persist_after_loss: 5.0     # persistance joueur après disparition
 card_min_area: 4000         # aire minimale du losange (px)
 card_min_matches: 12        # keypoints ORB minimum pour valider
 card_score_threshold: 0.20  # score minimum ORB (0.0–1.0)
-card_consec_frames: 5       # nb de frames consécutives pour confirmer la carte
+card_consec_frames: 1       # nb de frames consécutives pour démarrer le hold — 1 bonne frame suffit, L2+L3 vérifient déjà géométrie+score
+card_miss_grace_frames: 3   # frames ratées d'affilée tolérées PENDANT le hold sans tout reset (bruit caméra isolé)
 
 # ── Features optionnelles ─────────────────────────────────────────
 enable_heartbeat: true      # UDP heartbeat toutes les 5s (broadcast LAN)
