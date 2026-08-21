@@ -25,8 +25,17 @@ _view_status: dict = {
     "card_id": None,
     "card_label": None,
     "hold_pct": 0,
+    "service_mode": "prod",
 }
 _view_lock = threading.Lock()
+
+
+def set_service_mode(mode: str) -> None:
+    """Défini une seule fois au démarrage (main()) — "prod" ou "dev",
+    purement informatif (badge sur /view + champ /api/status), aucun
+    changement de comportement du pipeline."""
+    with _view_lock:
+        _view_status["service_mode"] = mode
 
 
 def push_event(event: dict) -> None:
@@ -173,6 +182,8 @@ body{background:#000;color:#fff;font-family:monospace;height:100vh;display:flex;
 #fsm-b{background:#222;color:#666}
 #fsm-b.idle{background:#0d1f0d;color:#4caf50}
 #fsm-b.standby{background:#001f1f;color:#00e5cc}
+#mode-b.prod{background:#0d1f0d;color:#4caf50}
+#mode-b.dev{background:#2b1710;color:#ff9800}
 #card-d{color:#bbb}
 #fps-d{color:#555;font-variant-numeric:tabular-nums}
 #ws-d{margin-left:auto;font-size:10px;color:#444}
@@ -215,14 +226,15 @@ body{background:#000;color:#fff;font-family:monospace;height:100vh;display:flex;
   </div>
 </div>
 <div id="bar">
-  <span>FSM&nbsp;<span id="fsm-b" class="badge idle">IDLE</span></span>
+  <span id="mode-b" class="badge prod">PROD</span>
+  <span>\xc3\x89tat&nbsp;<span id="fsm-b" class="badge idle">STANDBY</span></span>
   <span id="card-d">\xe2\x80\x94</span>
   <span id="fps-d">\xe2\x80\x94 fps</span>
   <span id="ws-d">&#9679; ws\xe2\x80\xa6</span>
 </div>
 <script>
 const $=id=>document.getElementById(id);
-const fsmEl=$('fsm-b'),cardEl=$('card-d'),wsEl=$('ws-d'),fpsEl=$('fps-d');
+const fsmEl=$('fsm-b'),modeEl=$('mode-b'),cardEl=$('card-d'),wsEl=$('ws-d'),fpsEl=$('fps-d');
 const holdEl=$('hold'),holdFill=$('hold-fill'),holdTxt=$('hold-txt');
 const sbEl=$('standby'),sbName=$('sb-name');
 const readyEl=$('ready'),readyTxt=$('ready-txt');
@@ -236,8 +248,15 @@ function flash(el,ms){
   el._t=setTimeout(()=>{el.style.display='none';},ms||4000);
 }
 function fsm(s){
-  fsmEl.textContent=s;
+  // s = etat technique interne (IDLE|STANDBY), traduit en langage GM :
+  // IDLE (en attente d'une carte) -> "STANDBY", STANDBY (effet en cours) -> "WORKING".
+  fsmEl.textContent=s==='STANDBY'?'WORKING':'STANDBY';
   fsmEl.className='badge '+(s==='STANDBY'?'standby':'idle');
+}
+function mode(m){
+  m=(m||'prod').toLowerCase();
+  modeEl.textContent=m.toUpperCase();
+  modeEl.className='badge '+(m==='dev'?'dev':'prod');
 }
 function pad2(n){return String(n).padStart(2,'0');}
 function nowHMS(){
@@ -298,6 +317,7 @@ function connect(){
 }
 fetch('/api/status').then(r=>r.json()).then(s=>{
   fsm(s.fsm||'IDLE');
+  mode(s.service_mode);
   if(s.card_label){cardEl.textContent=s.card_label;sbName.textContent=s.card_label;}
   if(s.fsm==='STANDBY'){sbEl.style.display='flex';}
 }).catch(()=>{});

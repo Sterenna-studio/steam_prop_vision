@@ -59,7 +59,12 @@ from apps.rpi.actions import run_actions, handle_loxone_command
 from apps.rpi.qr_flux import QRFluxChecker
 from apps.rpi.watchdog import Watchdog
 from apps.rpi.boot import boot_checks
-from apps.rpi.view import push_event, update_stream_frame, start_mjpeg_server
+from apps.rpi.view import (
+    push_event,
+    update_stream_frame,
+    start_mjpeg_server,
+    set_service_mode,
+)
 
 CONFIG_FILE = "config/features.yaml"
 LOG_FILE = "logs/steam_vision.log"
@@ -462,6 +467,15 @@ def main():
 
     cfg = load_config()
 
+    service_mode = cfg.get("service_mode", "prod")
+    if service_mode not in ("prod", "dev"):
+        log.warning(
+            f"[config] service_mode={service_mode!r} invalide (attendu "
+            "'prod' ou 'dev') — repli sur 'prod'"
+        )
+        service_mode = "prod"
+    set_service_mode(service_mode)
+
     pipeline_mode = cfg.get("pipeline_mode", "card")
     monitor_on = cfg.get("enable_monitor", True)
     rule_api_on = cfg.get("enable_rule_api", True)
@@ -475,6 +489,7 @@ def main():
     log.info("=" * 55)
     log.info("  S.T.E.A.M Vision — STYX  |  Pi 5")
     log.info("=" * 55)
+    log.info("  Service     : " + service_mode.upper())
     log.info("  Mode        : " + pipeline_mode.upper())
     if pipeline_mode == "card":
         log.info("  Hold        : " + str(cfg.get("card_hold_ms", 2000)) + "ms")

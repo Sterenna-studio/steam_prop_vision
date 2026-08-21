@@ -1,5 +1,13 @@
 # S.T.E.A.M Features — éditable ici ou via tools/feature_gui.py
 
+# ── Mode service ──────────────────────────────────────────────────
+# "prod" : session client réelle — visible sur /view et dans les logs comme
+#          STANDBY (en attente d'une carte) / WORKING (effet en cours)
+# "dev"  : hors session, pour développement/tests — purement informatif,
+#          ne change aucun comportement du pipeline (Loxone/vidéo/audio
+#          continuent de fonctionner normalement)
+service_mode: "prod"
+
 # ── Mode pipeline ─────────────────────────────────────────────────
 # "card"   : scan continu de la carte → hold 2s → vidéo + UDP   (défaut STYX)
 # "person" : YOLO détecte joueur X secondes → joue un MP3
