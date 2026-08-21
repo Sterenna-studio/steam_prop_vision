@@ -88,22 +88,28 @@ Indépendant du mode `card` — un seul des deux modes tourne à la fois, sélec
 par `pipeline_mode`.
 
 La carte/le joueur déclenché exécute les actions définies dans
-`config/rules.yaml` (UDP Loxone, audio, vidéo) via `apps/rpi/actions.py`. Le
-`cooldown` par carte (ex: `plate_bougie: cooldown: 8`) est appliqué : deux
-déclenchements de la même carte à moins de `cooldown` secondes d'intervalle
-n'exécutent l'action qu'une fois. En pratique, la boucle caméra (FSM
-IDLE/STANDBY) empêche déjà tout re-déclenchement rapproché — le cooldown
-protège surtout le seul chemin qui contourne ce FSM : le trigger manuel
-Loxone `STEAM_TRIGGER:<id>` (voir `LOXONE.md`), qui sans lui pouvait rejouer
-une action en boucle sans limite.
+`config/rules.yaml` (UDP Loxone, audio, vidéo) via `apps/rpi/actions.py`.
+`run_actions()` — appelé par la boucle caméra normale — reste
+**inconditionnel** : le FSM (IDLE/STANDBY) protège déjà ce chemin contre
+tout re-déclenchement rapproché, et lui ajouter le cooldown désynchroniserait
+l'état affiché de ce qui se joue réellement (le système resterait en
+STANDBY sans rien jouer si le cooldown bloquait silencieusement l'action).
 
-`min_duration`, en revanche, reste sans effet avec le point d'appel actuel :
-il suppose un appelant qui interroge `should_trigger()` à répétition tant
-qu'une carte est vue, alors que `run_actions()` n'est appelé qu'une seule
-fois, au moment où le trigger est déjà confirmé par le FSM. `RuleEngine`
-avertit au chargement si une règle active a `min_duration > 0`. Le ping
-informatif `STEAM_DETECT_<id>` envoyé pour une carte sans règle configurée
-n'est lui jamais soumis au cooldown (rien à rejouer).
+Le `cooldown` par carte (ex: `plate_bougie: cooldown: 8`) protège
+spécifiquement le seul chemin qui contourne ce FSM : le trigger manuel
+Loxone `STEAM_TRIGGER:<id>` (voir `LOXONE.md`), qui sans lui pouvait rejouer
+une action en boucle sans limite. `handle_loxone_command()` appelle
+`RuleEngine.try_trigger()` (vérification + marquage atomiques sous un
+verrou — protège aussi contre une rafale de plusieurs `STEAM_TRIGGER`
+concurrents pour la même carte) avant `run_actions()`.
+
+`min_duration`, en revanche, reste sans effet avec ce point d'appel : il
+suppose un appelant qui interroge `should_trigger()` à répétition tant
+qu'une carte est vue, alors que `try_trigger()` n'est appelé qu'une seule
+fois, au moment où la commande Loxone arrive. `RuleEngine` avertit au
+chargement si une règle active a `min_duration > 0`. Le ping informatif
+`STEAM_DETECT_<id>` envoyé pour une carte sans règle configurée n'est lui
+jamais soumis au cooldown (rien à rejouer).
 
 ---
 

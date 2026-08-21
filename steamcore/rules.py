@@ -10,10 +10,14 @@ des actions, en tenant compte de :
 """
 
 from __future__ import annotations
+import logging
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+log = logging.getLogger("steam")
 
 try:
     import yaml
@@ -138,6 +142,10 @@ class RuleEngine:
         # État runtime
         self._last_trigger: dict[str, float] = {}
         self._first_seen: dict[str, float] = {}  # pour min_duration
+        # Protège _last_trigger/_first_seen : try_trigger() peut être appelé
+        # depuis plusieurs threads (ex: rafale de STEAM_TRIGGER Loxone, un
+        # thread daemon par message reçu — voir apps/rpi/actions.py).
+        self._lock = threading.Lock()
 
         self.reload()
 
@@ -164,15 +172,15 @@ class RuleEngine:
         }
         print(f"[rules] {len(self._rules)} règles chargées depuis {self.config_path}")
 
-        # should_trigger() n'est appelé qu'une seule fois par label, au moment
-        # où le trigger est déjà confirmé (par le FSM caméra ou par un trigger
-        # manuel Loxone) — pas interrogé à répétition tant que le label est
-        # vu. min_duration suppose ce second cas : avec l'appel unique, une
-        # règle enabled avec min_duration>0 ne déclencherait donc jamais.
+        # try_trigger() n'est appelé qu'une seule fois par label, au moment
+        # où le trigger manuel Loxone est reçu (voir apps/rpi/actions.py) —
+        # pas interrogé à répétition tant que le label est vu. min_duration
+        # suppose ce second cas : avec l'appel unique, une règle enabled avec
+        # min_duration>0 ne déclencherait donc jamais.
         for label, rule in self._rules.items():
             if rule.enabled and rule.min_duration > 0:
-                print(
-                    f"[rules] WARN [{label}].min_duration={rule.min_duration} "
+                log.warning(
+                    f"[rules] [{label}].min_duration={rule.min_duration} "
                     "n'a aucun effet avec le point d'appel actuel de "
                     "should_trigger() (appelé une seule fois, trigger déjà "
                     "confirmé) — seul cooldown est réellement appliqué."
@@ -230,6 +238,22 @@ class RuleEngine:
         label = label.lower()
         now = time.time() if now is None else now
         self._last_trigger[label] = now
+
+    def try_trigger(self, label: str, now: float | None = None) -> bool:
+        """Vérifie et marque le déclenchement de façon atomique (thread-safe).
+
+        should_trigger()+mark_triggered() séparés laissent une fenêtre entre
+        la vérification et le marquage — deux threads peuvent tous les deux
+        passer should_trigger() avant qu'aucun n'ait appelé mark_triggered()
+        (ex: deux STEAM_TRIGGER Loxone pour la même carte à quelques ms
+        d'écart, chacun sur son propre thread). À utiliser à la place dès
+        qu'un même label peut être déclenché depuis plusieurs threads.
+        """
+        with self._lock:
+            if not self.should_trigger(label, now=now):
+                return False
+            self.mark_triggered(label, now=now)
+            return True
         self._first_seen.pop(label, None)
 
     def reset_seen(self, label: str) -> None:

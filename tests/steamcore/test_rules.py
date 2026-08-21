@@ -4,6 +4,7 @@ Tests unitaires pour RuleEngine et validate_rules_schema.
 """
 
 import pytest
+import threading
 import time
 from pathlib import Path
 
@@ -138,3 +139,51 @@ class TestRuleEngine:
         engine.reload()
         # Les règles doivent être inchangées
         assert engine._rules == original_rules
+
+
+class TestTryTrigger:
+    """try_trigger() : version atomique (verrouillée) de should_trigger()+
+    mark_triggered(), utilisée par apps/rpi/actions.py pour le trigger
+    manuel Loxone (seul chemin où plusieurs threads peuvent appeler la même
+    carte en même temps)."""
+
+    def test_first_call_triggers_and_marks(self, engine):
+        assert engine.try_trigger("plate_test") is True
+        assert "plate_test" in engine._last_trigger
+
+    def test_second_call_within_cooldown_blocked(self, engine):
+        now = time.time()
+        assert engine.try_trigger("plate_test", now=now) is True
+        assert engine.try_trigger("plate_test", now=now + 1.0) is False
+
+    def test_call_after_cooldown_elapsed_allowed(self, engine):
+        now = time.time()
+        assert engine.try_trigger("plate_test", now=now) is True
+        assert engine.try_trigger("plate_test", now=now + 10.0) is True
+
+    def test_disabled_label_never_triggers(self, engine):
+        assert (
+            engine.try_trigger("inexistant") is False
+        )  # -> __default__, enabled=False
+
+    def test_concurrent_calls_only_one_wins(self, engine):
+        """Simule deux threads (ex: deux STEAM_TRIGGER Loxone rapprochés)
+        appelant try_trigger() pour la même carte en même temps : un seul
+        doit passer, quel que soit l'ordre d'exécution du GIL."""
+        results = []
+        results_lock = threading.Lock()
+        start = threading.Barrier(2)
+
+        def _attempt():
+            start.wait()
+            ok = engine.try_trigger("plate_test")
+            with results_lock:
+                results.append(ok)
+
+        threads = [threading.Thread(target=_attempt) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert sorted(results) == [False, True]

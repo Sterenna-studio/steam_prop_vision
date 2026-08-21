@@ -1,7 +1,13 @@
 """
 tests/apps_rpi/test_actions.py
-Tests unitaires pour apps.rpi.actions (dispatch d'actions + cooldown +
-commandes Loxone). Aucune dépendance picamera2/matériel.
+Tests unitaires pour apps.rpi.actions (dispatch d'actions + commandes
+Loxone). Aucune dépendance picamera2/matériel.
+
+run_actions() est inconditionnel (pas de cooldown) : c'est le chemin appelé
+par la boucle caméra, déjà protégée par le FSM IDLE/STANDBY. Le cooldown
+(RuleEngine.try_trigger()) ne s'applique qu'au trigger manuel Loxone
+(handle_loxone_command), seul chemin qui contourne ce FSM — voir le
+docstring de apps/rpi/actions.py pour le raisonnement complet.
 """
 
 from __future__ import annotations
@@ -77,7 +83,9 @@ def test_run_actions_accepts_recognition_result_like_object(rule_engine):
     assert audio.calls == ["test_audio"]
 
 
-def test_run_actions_respects_cooldown(rule_engine):
+def test_run_actions_is_unconditional_ignores_cooldown(rule_engine):
+    """La boucle caméra (déjà protégée par le FSM) n'est pas gatée ici —
+    sinon l'état affiché désynchronise de ce qui se joue réellement."""
     audio, video = _StubPlayer(), _StubPlayer()
     actions.run_actions({}, rule_engine, "plate_test", audio, video)
     _settle()
@@ -85,23 +93,13 @@ def test_run_actions_respects_cooldown(rule_engine):
 
     actions.run_actions({}, rule_engine, "plate_test", audio, video)
     _settle()
-    assert audio.calls == []  # cooldown de 8s actif -> deuxième appel ignoré
-
-
-def test_run_actions_cooldown_elapsed_allows_retrigger(rule_engine):
-    audio, video = _StubPlayer(), _StubPlayer()
-    now = time.time()
-    rule_engine.mark_triggered("plate_test", now=now - 9.0)  # cooldown=8s, dépassé
-
-    actions.run_actions({}, rule_engine, "plate_test", audio, video)
-    _settle()
-    assert audio.calls == ["test_audio"]
+    assert audio.calls == ["test_audio"]  # rejoue malgré le cooldown de 8s
 
 
 def test_run_actions_unconfigured_card_sends_fallback_udp_unconditionally(
     rule_engine, monkeypatch
 ):
-    """Carte sans règle -> ping STEAM_DETECT_<id>, jamais soumis au cooldown."""
+    """Carte sans règle -> ping STEAM_DETECT_<id>."""
     sent = []
     monkeypatch.setattr(
         actions,
@@ -167,3 +165,97 @@ def test_handle_loxone_command_trigger_runs_actions(rule_engine):
     )
     _settle(0.1)
     assert audio.calls == ["test_audio"]
+
+
+def test_handle_loxone_command_trigger_respects_cooldown(rule_engine):
+    """Deuxième STEAM_TRIGGER rapproché pour la même carte -> ignoré."""
+    audio, video = _StubPlayer(), _StubPlayer()
+
+    actions.handle_loxone_command(
+        "STEAM_TRIGGER:plate_test",
+        ("192.168.1.50", 12345),
+        {},
+        rule_engine,
+        audio,
+        video,
+        threading.Event(),
+    )
+    _settle(0.1)
+    audio.calls.clear()
+
+    actions.handle_loxone_command(
+        "STEAM_TRIGGER:plate_test",
+        ("192.168.1.50", 12345),
+        {},
+        rule_engine,
+        audio,
+        video,
+        threading.Event(),
+    )
+    _settle(0.1)
+    assert audio.calls == []  # cooldown de 8s actif
+
+
+def test_handle_loxone_command_trigger_unconfigured_card_bypasses_cooldown(
+    rule_engine, monkeypatch
+):
+    """Carte sans règle -> pas de gate try_trigger(), fallback ping direct."""
+    sent = []
+    monkeypatch.setattr(
+        actions,
+        "send_event_reliable",
+        lambda msg, ip, port, **k: sent.append(msg) or True,
+    )
+    audio, video = _StubPlayer(), _StubPlayer()
+
+    actions.handle_loxone_command(
+        "STEAM_TRIGGER:plate_inconnue",
+        ("192.168.1.50", 12345),
+        {},
+        rule_engine,
+        audio,
+        video,
+        threading.Event(),
+    )
+    _settle(0.1)
+    actions.handle_loxone_command(
+        "STEAM_TRIGGER:plate_inconnue",
+        ("192.168.1.50", 12345),
+        {},
+        rule_engine,
+        audio,
+        video,
+        threading.Event(),
+    )
+    _settle(0.1)
+
+    assert sent == ["STEAM_DETECT_PLATE_INCONNUE", "STEAM_DETECT_PLATE_INCONNUE"]
+
+
+def test_handle_loxone_command_trigger_disabled_rule_is_ignored(tmp_path):
+    rules_file = tmp_path / "rules.yaml"
+    rules_file.write_text(
+        """
+rules:
+  plate_off:
+    enabled: false
+    actions:
+      - type: audio
+        subdir: should_not_play
+""",
+        encoding="utf-8",
+    )
+    rule_engine = RuleEngine(str(rules_file))
+    audio, video = _StubPlayer(), _StubPlayer()
+
+    actions.handle_loxone_command(
+        "STEAM_TRIGGER:plate_off",
+        ("192.168.1.50", 12345),
+        {},
+        rule_engine,
+        audio,
+        video,
+        threading.Event(),
+    )
+    _settle(0.1)
+    assert audio.calls == []

@@ -43,13 +43,13 @@ def boot_checks() -> None:
 
     # Lecteur vidéo
     players = ["mpv", "ffplay", "vlc"]
-    if not any(shutil.which(p) for p in players):
+    found = next((p for p in players if shutil.which(p)), None)
+    if found is None:
         errors.append(
             "Aucun lecteur vidéo trouvé (mpv / ffplay / vlc). "
             "Installer avec : sudo apt install mpv"
         )
     else:
-        found = next(p for p in players if shutil.which(p))
         log.info(f"[boot] Lecteur vidéo : {found} OK")
 
     # aplay pour l'audio
@@ -57,11 +57,14 @@ def boot_checks() -> None:
         log.warning("[boot] WARN : aplay et mpg123 introuvables — audio désactivé")
 
     # PLATEST
-    if not Path("PLATEST").exists() or not any(Path("PLATEST").iterdir()):
+    if not Path("PLATEST").exists():
         errors.append("Dossier PLATEST vide ou absent — aucun template de plate.")
     else:
         plates = [d for d in Path("PLATEST").iterdir() if d.is_dir()]
-        log.info(f"[boot] PLATEST : {len(plates)} plate(s) trouvée(s)")
+        if not plates:
+            errors.append("Dossier PLATEST vide ou absent — aucun template de plate.")
+        else:
+            log.info(f"[boot] PLATEST : {len(plates)} plate(s) trouvée(s)")
 
     # config/rules.yaml
     if not Path("config/rules.yaml").exists():

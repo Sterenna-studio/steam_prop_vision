@@ -133,12 +133,12 @@ class State(Enum):
 class _RunFlag:
     """Installe SIGINT/SIGTERM et expose .running — partagé par les deux
     boucles (run_card_mode/run_person_mode), qui avaient chacune leur propre
-    copie du même couple running/nonlocal/_stop."""
+    copie du même couple running/nonlocal/_stop. Armé dès la construction :
+    pas d'étape séparée à oublier d'appeler."""
 
     def __init__(self):
         self.running = True
 
-    def install_signal_handlers(self) -> None:
         def _stop(sig, frame):
             self.running = False
             log.info("[stop] Arret propre...")
@@ -147,13 +147,14 @@ class _RunFlag:
         signal.signal(signal.SIGTERM, _stop)
 
 
-def _apply_force_reset(video, audio, reset_fn) -> None:
+def _apply_force_reset(video, audio, reset_fn) -> State:
     """Remet à IDLE sur réception de STEAM_RESET (voir apps/rpi/actions.py)."""
     video.stop()
     audio.stop()
     reset_fn()
     log.info("[state] -> IDLE (reset Loxone)")
     push_event({"type": "state", "state": "IDLE"})
+    return State.IDLE
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -208,7 +209,6 @@ def run_card_mode(cfg, cam, rule_engine, audio, video, watchdog, force_reset):
     push_event({"type": "state", "state": "IDLE"})
 
     flag = _RunFlag()
-    flag.install_signal_handlers()
 
     def _reset_detection():
         nonlocal hold_card_id, hold_start, consec_card_id, consec_count
@@ -245,8 +245,7 @@ def run_card_mode(cfg, cam, rule_engine, audio, video, watchdog, force_reset):
 
         if force_reset.is_set():
             force_reset.clear()
-            _apply_force_reset(video, audio, _reset_detection)
-            state = State.IDLE
+            state = _apply_force_reset(video, audio, _reset_detection)
             continue
 
         if state == State.STANDBY:
@@ -403,7 +402,6 @@ def run_person_mode(cfg, cam, rule_engine, audio, video, watchdog, force_reset):
     push_event({"type": "state", "state": "IDLE"})
 
     flag = _RunFlag()
-    flag.install_signal_handlers()
 
     while flag.running:
         frame = cam.capture_array()
@@ -419,8 +417,7 @@ def run_person_mode(cfg, cam, rule_engine, audio, video, watchdog, force_reset):
 
         if force_reset.is_set():
             force_reset.clear()
-            _apply_force_reset(video, audio, tracker.reset)
-            state = State.IDLE
+            state = _apply_force_reset(video, audio, tracker.reset)
             continue
 
         if state == State.STANDBY:

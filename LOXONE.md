@@ -57,7 +57,7 @@ au message d'origine.
 ## 3. Loxone → STYX (commandes)
 
 Reçues sur `udp_listen_port` (8888 par défaut), traitées par
-`_handle_loxone_command()` dans `apps/rpi/main.py` :
+`handle_loxone_command()` dans `apps/rpi/actions.py` :
 
 | Commande | Effet | Réponse |
 |---|---|---|
@@ -69,9 +69,14 @@ Reçues sur `udp_listen_port` (8888 par défaut), traitées par
 
 `STEAM_TRIGGER` réutilise directement `run_actions()` — mêmes règles,
 mêmes seuils de `rules.yaml`, aucune duplication de logique avec la
-détection carte normale. Aucune limite de fréquence appliquée (cohérent avec
-le reste du pipeline, où `cooldown`/`min_duration` de `rules.yaml` ne sont
-pas non plus appliqués aujourd'hui — voir README.md).
+détection carte normale. C'est le seul chemin qui contourne le FSM caméra
+(IDLE/STANDBY), donc le seul protégé par le `cooldown` par carte de
+`rules.yaml` : `handle_loxone_command()` appelle `RuleEngine.try_trigger()`
+(vérification + marquage atomiques, thread-safe — une rafale de plusieurs
+`STEAM_TRIGGER` pour la même carte ne fait passer qu'un seul appel) avant de
+lancer `run_actions()`. `run_actions()` lui-même reste inconditionnel — le
+chemin caméra normale, où il est aussi appelé, est déjà protégé par le FSM
+et ne doit pas désynchroniser l'état affiché (voir README.md).
 
 ## 4. Ce qui reste à faire côté Loxone (hors dépôt)
 

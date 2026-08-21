@@ -3,20 +3,29 @@ apps/rpi/actions.py
 Dispatch des actions déclenchées par une carte reconnue ou une commande
 Loxone, et gestion des commandes entrantes (voir LOXONE.md).
 
-Câblage RuleEngine.should_trigger()/mark_triggered() : protège en particulier
-le trigger manuel Loxone (STEAM_TRIGGER:<id>), seul chemin qui contourne le
-FSM caméra (IDLE/STANDBY) et pouvait donc rejouer une action sans limite. Le
-cooldown fonctionne correctement avec cet appel unique (time-since-last-
-trigger). min_duration, lui, suppose un appelant qui interroge
-should_trigger() à répétition tant qu'un label est vu — avec ce point d'appel
-unique (au moment où le FSM a déjà confirmé le trigger), min_duration>0 sur
-une règle active ne déclencherait jamais. RuleEngine.reload() avertit si une
-règle enabled a min_duration>0 (voir steamcore/rules.py).
+Câblage RuleEngine.try_trigger() : protège spécifiquement le trigger manuel
+Loxone (STEAM_TRIGGER:<id>), seul chemin qui contourne le FSM caméra
+(IDLE/STANDBY) et peut donc arriver en rafale (plusieurs threads
+"loxone-trigger" concurrents, voir handle_loxone_command). try_trigger() est
+atomique (verrou dans RuleEngine) pour fermer la fenêtre entre vérification
+et marquage — sans ça, deux STEAM_TRIGGER pour la même carte à quelques ms
+d'écart pourraient tous les deux passer la vérification avant qu'aucun
+n'ait marqué le déclenchement, et rejouer l'action deux fois.
 
-Le cooldown ne s'applique qu'aux actions réellement configurées (audio/
-vidéo/UDP dans rules.yaml) : le ping informatif STEAM_DETECT_<id> envoyé pour
-une carte sans règle configurée n'a aucun effet à rejouer et reste donc
-inconditionnel, comme avant ce câblage.
+run_actions() lui-même reste inconditionnel (pas de cooldown) : c'est le
+chemin appelé par la boucle caméra (run_card_mode/run_person_mode), où le
+FSM (IDLE/STANDBY) empêche déjà tout re-déclenchement rapproché. Y ajouter
+aussi le cooldown désynchroniserait l'état affiché de ce qui se passe
+réellement : main.py pousse STANDBY et attend idle_after_s inconditionnellement
+après un hold confirmé, donc si run_actions() n'avait rien fait (cooldown
+actif), le système resterait plusieurs secondes en STANDBY sans rien jouer,
+sans aucun retour visuel — un vrai "trou" côté GM. Le cooldown de rules.yaml
+ne protège donc que le chemin qui n'a pas déjà cette protection : Loxone.
+
+min_duration reste sans effet avec le point d'appel actuel de
+RuleEngine.should_trigger() (appelé une seule fois par try_trigger(), au
+moment où la commande Loxone arrive) — RuleEngine.reload() avertit si une
+règle enabled en a un (voir steamcore/rules.py).
 """
 
 from __future__ import annotations
@@ -45,9 +54,10 @@ def udp_send(msg, ip, port):
     threading.Thread(target=_send, daemon=True, name="udp-send").start()
 
 
-def run_actions(cfg, rule_engine, label_or_result, audio, video, card_id=None):
+def run_actions(cfg, rule_engine, label_or_result, audio, video):
     """
-    Dispatche les actions d'une règle (carte ou person).
+    Dispatche les actions d'une règle (carte ou person). Inconditionnel —
+    voir docstring du module pour pourquoi le cooldown n'est pas ici.
     label_or_result : RecognitionResult (mode card) ou str (mode person).
     """
     cid = getattr(label_or_result, "card_id", label_or_result)
@@ -56,15 +66,8 @@ def run_actions(cfg, rule_engine, label_or_result, audio, video, card_id=None):
 
     actions = rule_engine.get_actions(cid)
     if not actions:
-        # Pas de règle configurée pour cette carte : simple ping informatif,
-        # jamais soumis au cooldown (comportement inchangé — aucun effet à
-        # rejouer, contrairement aux actions audio/vidéo/UDP ci-dessous).
         msg = "STEAM_DETECT_" + cid.upper()
         udp_send(msg, lox_ip, lox_port)
-        return
-
-    if not rule_engine.should_trigger(cid):
-        log.info(f"[rules] {cid} ignoré (cooldown actif)")
         return
 
     for action in actions:
@@ -94,8 +97,6 @@ def run_actions(cfg, rule_engine, label_or_result, audio, video, card_id=None):
             msg = action.message or ("STEAM_DETECT_" + cid.upper())
             udp_send(msg, lox_ip, lox_port)
 
-    rule_engine.mark_triggered(cid)
-
 
 def handle_loxone_command(
     msg, addr, cfg, rule_engine, audio, video, force_reset
@@ -112,6 +113,13 @@ def handle_loxone_command(
     elif msg.startswith("STEAM_TRIGGER:"):
         card_id = msg[len("STEAM_TRIGGER:") :]
         log.info(f"[loxone] STEAM_TRIGGER reçu -> {card_id}")
+        # Le cooldown ne protège que ce qui a un effet à rejouer. Une carte
+        # sans règle (ou avec une liste actions vide) tombe dans le fallback
+        # STEAM_DETECT_<id> de run_actions(), inconditionnel — rien à
+        # protéger, donc pas de passage par try_trigger() pour ce cas.
+        if rule_engine.get_actions(card_id) and not rule_engine.try_trigger(card_id):
+            log.info(f"[rules] {card_id} ignoré (désactivé ou cooldown actif)")
+            return
         threading.Thread(
             target=run_actions,
             args=(cfg, rule_engine, card_id, audio, video),
