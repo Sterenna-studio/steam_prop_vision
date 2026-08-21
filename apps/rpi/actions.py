@@ -54,11 +54,14 @@ def udp_send(msg, ip, port):
     threading.Thread(target=_send, daemon=True, name="udp-send").start()
 
 
-def run_actions(cfg, rule_engine, label_or_result, audio, video):
+def run_actions(cfg, rule_engine, label_or_result, audio, video, image):
     """
     Dispatche les actions d'une règle (carte ou person). Inconditionnel —
     voir docstring du module pour pourquoi le cooldown n'est pas ici.
     label_or_result : RecognitionResult (mode card) ou str (mode person).
+    image : instance ImagePlayer partagée (construite une fois dans main(),
+    pas à chaque trigger — son constructeur scanne le PATH pour détecter
+    mpv/feh/eog).
     """
     cid = getattr(label_or_result, "card_id", label_or_result)
     lox_ip = cfg.get("loxone_ip", "192.168.1.50")
@@ -84,12 +87,8 @@ def run_actions(cfg, rule_engine, label_or_result, audio, video):
             push_event({"type": "video", "card": cid, "subdir": action.subdir})
 
         elif action.type == "image" and cfg.get("enable_video", True):
-            from steamcore.image_player import ImagePlayer
-
             threading.Thread(
-                target=ImagePlayer("assets/img").show_random,
-                args=(action.subdir,),
-                daemon=True,
+                target=image.show_random, args=(action.subdir,), daemon=True
             ).start()
             push_event({"type": "image", "card": cid, "subdir": action.subdir})
 
@@ -99,7 +98,7 @@ def run_actions(cfg, rule_engine, label_or_result, audio, video):
 
 
 def handle_loxone_command(
-    msg, addr, cfg, rule_engine, audio, video, force_reset
+    msg, addr, cfg, rule_engine, audio, video, image, force_reset
 ) -> None:
     """Dispatche les commandes reçues de Loxone sur udp_listen_port."""
     log.info("[UDP RX] " + addr[0] + " -> " + msg)
@@ -122,7 +121,7 @@ def handle_loxone_command(
             return
         threading.Thread(
             target=run_actions,
-            args=(cfg, rule_engine, card_id, audio, video),
+            args=(cfg, rule_engine, card_id, audio, video, image),
             daemon=True,
             name="loxone-trigger",
         ).start()

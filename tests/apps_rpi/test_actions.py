@@ -27,6 +27,9 @@ class _StubPlayer:
     def play_random(self, subdir: str = ""):
         self.calls.append(subdir)
 
+    def show_random(self, subdir: str = ""):
+        self.calls.append(subdir)
+
     def stop(self):
         pass
 
@@ -66,9 +69,13 @@ def _settle(seconds: float = 0.05) -> None:
     time.sleep(seconds)  # laisse les threads daemon (audio/video/udp) tourner
 
 
+def _players():
+    return _StubPlayer(), _StubPlayer(), _StubPlayer()  # audio, video, image
+
+
 def test_run_actions_dispatches_configured_actions(rule_engine):
-    audio, video = _StubPlayer(), _StubPlayer()
-    actions.run_actions({}, rule_engine, "plate_test", audio, video)
+    audio, video, image = _players()
+    actions.run_actions({}, rule_engine, "plate_test", audio, video, image)
     _settle()
     assert audio.calls == ["test_audio"]
 
@@ -77,8 +84,8 @@ def test_run_actions_accepts_recognition_result_like_object(rule_engine):
     class _Result:
         card_id = "plate_test"
 
-    audio, video = _StubPlayer(), _StubPlayer()
-    actions.run_actions({}, rule_engine, _Result(), audio, video)
+    audio, video, image = _players()
+    actions.run_actions({}, rule_engine, _Result(), audio, video, image)
     _settle()
     assert audio.calls == ["test_audio"]
 
@@ -86,14 +93,35 @@ def test_run_actions_accepts_recognition_result_like_object(rule_engine):
 def test_run_actions_is_unconditional_ignores_cooldown(rule_engine):
     """La boucle caméra (déjà protégée par le FSM) n'est pas gatée ici —
     sinon l'état affiché désynchronise de ce qui se joue réellement."""
-    audio, video = _StubPlayer(), _StubPlayer()
-    actions.run_actions({}, rule_engine, "plate_test", audio, video)
+    audio, video, image = _players()
+    actions.run_actions({}, rule_engine, "plate_test", audio, video, image)
     _settle()
     audio.calls.clear()
 
-    actions.run_actions({}, rule_engine, "plate_test", audio, video)
+    actions.run_actions({}, rule_engine, "plate_test", audio, video, image)
     _settle()
     assert audio.calls == ["test_audio"]  # rejoue malgré le cooldown de 8s
+
+
+def test_run_actions_dispatches_image_action_via_shared_player(tmp_path):
+    rules_file = tmp_path / "rules.yaml"
+    rules_file.write_text(
+        """
+rules:
+  plate_image:
+    enabled: true
+    actions:
+      - type: image
+        subdir: test_image
+""",
+        encoding="utf-8",
+    )
+    rule_engine = RuleEngine(str(rules_file))
+    audio, video, image = _players()
+
+    actions.run_actions({}, rule_engine, "plate_image", audio, video, image)
+    _settle()
+    assert image.calls == ["test_image"]
 
 
 def test_run_actions_unconfigured_card_sends_fallback_udp_unconditionally(
@@ -106,11 +134,11 @@ def test_run_actions_unconfigured_card_sends_fallback_udp_unconditionally(
         "send_event_reliable",
         lambda msg, ip, port, **k: sent.append(msg) or True,
     )
-    audio, video = _StubPlayer(), _StubPlayer()
+    audio, video, image = _players()
 
-    actions.run_actions({}, rule_engine, "plate_inconnue", audio, video)
+    actions.run_actions({}, rule_engine, "plate_inconnue", audio, video, image)
     _settle()
-    actions.run_actions({}, rule_engine, "plate_inconnue", audio, video)
+    actions.run_actions({}, rule_engine, "plate_inconnue", audio, video, image)
     _settle()
 
     assert sent == ["STEAM_DETECT_PLATE_INCONNUE", "STEAM_DETECT_PLATE_INCONNUE"]
@@ -121,7 +149,7 @@ def test_handle_loxone_command_ping_sends_pong(monkeypatch, rule_engine):
     monkeypatch.setattr(
         actions, "udp_send_raw", lambda msg, ip, port: sent.append((msg, ip, port))
     )
-    audio, video = _StubPlayer(), _StubPlayer()
+    audio, video, image = _players()
 
     actions.handle_loxone_command(
         "STEAM_PING",
@@ -130,13 +158,14 @@ def test_handle_loxone_command_ping_sends_pong(monkeypatch, rule_engine):
         rule_engine,
         audio,
         video,
+        image,
         threading.Event(),
     )
     assert sent == [("STEAM_PONG", "192.168.1.50", 7777)]
 
 
 def test_handle_loxone_command_reset_sets_event(rule_engine):
-    audio, video = _StubPlayer(), _StubPlayer()
+    audio, video, image = _players()
     force_reset = threading.Event()
 
     actions.handle_loxone_command(
@@ -146,13 +175,14 @@ def test_handle_loxone_command_reset_sets_event(rule_engine):
         rule_engine,
         audio,
         video,
+        image,
         force_reset,
     )
     assert force_reset.is_set()
 
 
 def test_handle_loxone_command_trigger_runs_actions(rule_engine):
-    audio, video = _StubPlayer(), _StubPlayer()
+    audio, video, image = _players()
 
     actions.handle_loxone_command(
         "STEAM_TRIGGER:plate_test",
@@ -161,6 +191,7 @@ def test_handle_loxone_command_trigger_runs_actions(rule_engine):
         rule_engine,
         audio,
         video,
+        image,
         threading.Event(),
     )
     _settle(0.1)
@@ -169,7 +200,7 @@ def test_handle_loxone_command_trigger_runs_actions(rule_engine):
 
 def test_handle_loxone_command_trigger_respects_cooldown(rule_engine):
     """Deuxième STEAM_TRIGGER rapproché pour la même carte -> ignoré."""
-    audio, video = _StubPlayer(), _StubPlayer()
+    audio, video, image = _players()
 
     actions.handle_loxone_command(
         "STEAM_TRIGGER:plate_test",
@@ -178,6 +209,7 @@ def test_handle_loxone_command_trigger_respects_cooldown(rule_engine):
         rule_engine,
         audio,
         video,
+        image,
         threading.Event(),
     )
     _settle(0.1)
@@ -190,6 +222,7 @@ def test_handle_loxone_command_trigger_respects_cooldown(rule_engine):
         rule_engine,
         audio,
         video,
+        image,
         threading.Event(),
     )
     _settle(0.1)
@@ -206,7 +239,7 @@ def test_handle_loxone_command_trigger_unconfigured_card_bypasses_cooldown(
         "send_event_reliable",
         lambda msg, ip, port, **k: sent.append(msg) or True,
     )
-    audio, video = _StubPlayer(), _StubPlayer()
+    audio, video, image = _players()
 
     actions.handle_loxone_command(
         "STEAM_TRIGGER:plate_inconnue",
@@ -215,6 +248,7 @@ def test_handle_loxone_command_trigger_unconfigured_card_bypasses_cooldown(
         rule_engine,
         audio,
         video,
+        image,
         threading.Event(),
     )
     _settle(0.1)
@@ -225,6 +259,7 @@ def test_handle_loxone_command_trigger_unconfigured_card_bypasses_cooldown(
         rule_engine,
         audio,
         video,
+        image,
         threading.Event(),
     )
     _settle(0.1)
@@ -246,7 +281,7 @@ rules:
         encoding="utf-8",
     )
     rule_engine = RuleEngine(str(rules_file))
-    audio, video = _StubPlayer(), _StubPlayer()
+    audio, video, image = _players()
 
     actions.handle_loxone_command(
         "STEAM_TRIGGER:plate_off",
@@ -255,6 +290,7 @@ rules:
         rule_engine,
         audio,
         video,
+        image,
         threading.Event(),
     )
     _settle(0.1)

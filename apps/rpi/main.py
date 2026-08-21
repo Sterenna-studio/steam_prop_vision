@@ -45,6 +45,7 @@ from picamera2 import Picamera2
 
 from steamcore.audio import AudioPlayer
 from steamcore.video_player import VideoPlayer
+from steamcore.image_player import ImagePlayer
 from steamcore.rules import RuleEngine
 from steamcore.udp import HeartbeatThread, UDPListener
 from steamcore.recognition.fast_detector import FastDetector
@@ -162,7 +163,7 @@ def _apply_force_reset(video, audio, reset_fn) -> State:
 # ══════════════════════════════════════════════════════════════════
 
 
-def run_card_mode(cfg, cam, rule_engine, audio, video, watchdog, force_reset):
+def run_card_mode(cfg, cam, rule_engine, audio, video, image, watchdog, force_reset):
     card_hold_ms = cfg.get("card_hold_ms", 1000)
     idle_after_s = cfg.get("idle_after_s", 3.0)
     card_min_area = cfg.get("card_min_area", 4000)
@@ -359,7 +360,7 @@ def run_card_mode(cfg, cam, rule_engine, audio, video, watchdog, force_reset):
             + "ms"
         )
         push_event({"type": "state", "state": "STANDBY"})
-        run_actions(cfg, rule_engine, result, audio, video)
+        run_actions(cfg, rule_engine, result, audio, video, image)
         state = State.STANDBY
         last_triggered = now
         _reset_detection()
@@ -373,7 +374,7 @@ def run_card_mode(cfg, cam, rule_engine, audio, video, watchdog, force_reset):
 # ══════════════════════════════════════════════════════════════════
 
 
-def run_person_mode(cfg, cam, rule_engine, audio, video, watchdog, force_reset):
+def run_person_mode(cfg, cam, rule_engine, audio, video, image, watchdog, force_reset):
     from steamcore.detector import YOLODetector
     from steamcore.person_tracker import PersonTracker
 
@@ -442,7 +443,7 @@ def run_person_mode(cfg, cam, rule_engine, audio, video, watchdog, force_reset):
                 + "s -> TRIGGER"
             )
             push_event({"type": "state", "state": "STANDBY"})
-            run_actions(cfg, rule_engine, "person", audio, video)
+            run_actions(cfg, rule_engine, "person", audio, video, image)
             state = State.STANDBY
             last_triggered = now
             log.info("[state] -> STANDBY (" + str(idle_after_s) + "s)")
@@ -496,6 +497,7 @@ def main():
     rule_engine = RuleEngine("config/rules.yaml")
     audio = AudioPlayer("assets/audio")
     video = VideoPlayer("assets/video")
+    image = ImagePlayer("assets/img")
     force_reset = threading.Event()
     watchdog = Watchdog(watchdog_timeout_s)
 
@@ -514,7 +516,7 @@ def main():
     UDPListener(
         port=listen_port,
         on_message=lambda msg, addr: handle_loxone_command(
-            msg, addr, cfg, rule_engine, audio, video, force_reset
+            msg, addr, cfg, rule_engine, audio, video, image, force_reset
         ),
     ).start()
 
@@ -531,9 +533,11 @@ def main():
     log.info("[init] Camera OK")
 
     if pipeline_mode == "person":
-        run_person_mode(cfg, cam, rule_engine, audio, video, watchdog, force_reset)
+        run_person_mode(
+            cfg, cam, rule_engine, audio, video, image, watchdog, force_reset
+        )
     else:
-        run_card_mode(cfg, cam, rule_engine, audio, video, watchdog, force_reset)
+        run_card_mode(cfg, cam, rule_engine, audio, video, image, watchdog, force_reset)
 
     cam.stop()
     audio.stop()
