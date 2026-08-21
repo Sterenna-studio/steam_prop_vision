@@ -176,7 +176,7 @@ def run_card_mode(cfg, cam, rule_engine, audio, video, image, watchdog, force_re
     card_threshold = cfg.get("card_score_threshold", 0.20)
     camera_rotation = cfg.get("camera_rotation", 0)
     consec_required = cfg.get("card_consec_frames", 1)
-    miss_grace = cfg.get("card_miss_grace_frames", 3)
+    miss_grace = cfg.get("card_miss_grace_frames", 5)
 
     fast_detector = FastDetector(min_area=card_min_area)
     # Registre partagé : L2 (CardDetector) et L3 (CardRecognizer) chargent
