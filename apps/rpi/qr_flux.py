@@ -18,7 +18,7 @@ import logging
 import cv2
 
 try:
-    from pyzbar.pyzbar import decode as _zbar_decode
+    from pyzbar.pyzbar import decode as _zbar_decode, ZBarSymbol
 
     QR_BACKEND = "zbar"
 except ImportError:
@@ -33,9 +33,18 @@ QR_REPEAT_COOLDOWN = 3.0  # s avant de repousser le même event pour le même QR
 
 
 def _decode_qr(frame, cv2_detector) -> str | None:
-    """Décode un QR dans la frame (pyzbar si dispo, sinon cv2 en repli)."""
+    """Décode un QR dans la frame (pyzbar si dispo, sinon cv2 en repli).
+
+    symbols=[ZBarSymbol.QRCODE] : on ne cherche que des QR codes — sans ça,
+    zbar essaie aussi tous les autres symbologies (EAN, databar, code128...)
+    sur chaque frame scannée, et son décodeur "databar" spamme des warnings
+    d'assertion sur du bruit caméra qui ne ressemble même pas à un code-barres
+    (observé sur STYX en conditions réelles : ~100% du volume de logs du
+    service en était rempli, noyant tout diagnostic utile). Restreindre au
+    QR élimine le bruit et évite des passes de décodage inutiles.
+    """
     if _zbar_decode is not None:
-        results = _zbar_decode(frame)
+        results = _zbar_decode(frame, symbols=[ZBarSymbol.QRCODE])
         return results[0].data.decode("utf-8", errors="ignore") if results else None
     data, _, _ = cv2_detector.detectAndDecode(frame)
     return data or None
