@@ -7,6 +7,10 @@ __pycache__/
 # Config locale (contient IP, ports, secrets)
 config/local.yaml
 
+# Contexte agent IA (accès matériel, notes de session) — local uniquement,
+# le dépôt est public
+AGENTS.md
+
 # Assets lourds (vidéos ne vont PAS dans git)
 assets/video/*.mp4
 assets/video/*.avi
