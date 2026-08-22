@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S.T.E.A.M — Plates</title>
+<style>
+:root{--bg:#0e0e0e;--surface:#181818;--surface2:#222;--border:#333;--text:#ddd;--muted:#777;--cyan:#0df;--green:#4caf50;--orange:#ff9800;--red:#f44336}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:13px 'Courier New',monospace;padding:18px}button,input{font:inherit}button{background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px 12px;cursor:pointer}button:hover{border-color:var(--cyan)}button.danger{color:var(--red);border-color:var(--red)}button:disabled{opacity:.4;cursor:not-allowed}.header{display:flex;align-items:center;gap:10px;margin-bottom:18px}.header h1{font-size:17px;letter-spacing:2px;color:var(--cyan);margin:0}.header .spacer{flex:1}.notice{padding:10px;border:1px solid #704900;background:#2a1b00;color:var(--orange);border-radius:6px;margin-bottom:14px}.panel{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:14px;margin-bottom:14px}.panel h2{font-size:11px;color:var(--cyan);letter-spacing:1.5px;text-transform:uppercase;margin:0 0 12px}.form{display:flex;gap:8px;flex-wrap:wrap}.form input[type=text]{min-width:220px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}.plate{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:10px}.plate.selected{border-color:var(--green)}.plate img{width:100%;height:130px;object-fit:contain;background:#111;border-radius:4px;margin-bottom:8px}.plate-head{display:flex;align-items:center;gap:7px}.plate-name{font-weight:bold;color:#fff;flex:1}.badge{font-size:10px;border-radius:10px;padding:2px 7px;background:#333}.badge.ok{color:var(--green);border:1px solid #255b28}.badge.warn{color:var(--orange);border:1px solid #704900}.meta{color:var(--muted);font-size:11px;line-height:1.7;margin:7px 0}.archive{display:flex;align-items:center;gap:8px;padding:7px;border-bottom:1px solid var(--border)}.archive span:first-child{flex:1}#status{min-height:20px;margin-top:8px}.ok-text{color:var(--green)}.err-text{color:var(--red)}
+</style>
+</head>
+<body>
+<div class="header"><h1>▦ PLATES ACTIVES</h1><span class="spacer"></span><button onclick="location.href='/monitor'">← Monitor</button><button onclick="loadPlates()">↻ Actualiser</button></div>
+<div class="notice">Les changements sont appliqués à chaud sur STYX et modifient son clone local. Une suppression est toujours déplacée dans l’archive restaurable <code>.runtime/plate_trash</code>.</div>
+<div class="panel">
+  <h2>Ajouter une plate ou enrichir ses images</h2>
+  <div class="form">
+    <input id="plate-id" type="text" value="plate_" placeholder="plate_nom">
+    <input id="plate-files" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+    <button id="upload-btn" onclick="uploadImages()">＋ Ajouter et recharger</button>
+  </div>
+  <div id="status"></div>
+</div>
+<div class="panel"><h2>Templates présents — <span id="counts">…</span></h2><div id="plates" class="grid"></div></div>
+<div class="panel"><h2>Archives restaurables</h2><div id="archives"></div></div>
+<script>
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function status(text,error=false){const e=document.getElementById('status');e.textContent=text;e.className=error?'err-text':'ok-text'}
+async function api(url,options){const r=await fetch(url,options);const d=await r.json();if(!r.ok)throw new Error(d.detail||d.error||`HTTP ${r.status}`);return d}
+async function loadPlates(){
+  try{
+    const d=await api('/plates');
+    document.getElementById('counts').textContent=`${d.runtime_count} chargée(s) / ${d.plates.length} dossier(s)`;
+    document.getElementById('plates').innerHTML=d.plates.map(p=>{
+      const first=p.images[0];
+      const preview=first?`<img src="/plates/${encodeURIComponent(p.plate_id)}/images/${encodeURIComponent(first)}" alt="${esc(p.plate_id)}">`:'<div class="meta">Aucune image valide</div>';
+      const rule=p.rule_configured?(p.rule_enabled?`${p.action_count} action(s)`:'règle désactivée'):'aucune règle';
+      return `<div class="plate ${p.selected?'selected':''}">${preview}<div class="plate-head"><span class="plate-name">${esc(p.plate_id)}</span><span class="badge ${p.selected?'ok':'warn'}">${p.selected?'CHARGÉE':'NON CHARGÉE'}</span></div><div class="meta">${p.image_count} image(s)<br>${esc(rule)}</div><button class="danger" ${p.protected?'disabled title="Plate système protégée"':''} onclick="archivePlate('${p.plate_id}')">Archiver</button></div>`;
+    }).join('')||'<div class="meta">Aucune plate.</div>';
+    document.getElementById('archives').innerHTML=d.archived.map(a=>`<div class="archive"><span>${esc(a.plate_id)} — ${a.image_count} image(s)</span><button onclick="restorePlate('${a.archive_id}')">Restaurer</button></div>`).join('')||'<div class="meta">Archive vide.</div>';
+  }catch(e){status('Chargement impossible : '+e,true)}
+}
+function toBase64(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result).split(',')[1]);r.onerror=reject;r.readAsDataURL(file)})}
+async function uploadImages(){
+  const plateId=document.getElementById('plate-id').value.trim().toLowerCase();
+  const files=[...document.getElementById('plate-files').files];
+  if(!files.length){status('Sélectionne au moins une image.',true);return}
+  const btn=document.getElementById('upload-btn');btn.disabled=true;status('Upload et rechargement des descripteurs…');
+  try{const payload={files:await Promise.all(files.map(async f=>({name:f.name,data:await toBase64(f)})))};const d=await api(`/plates/${encodeURIComponent(plateId)}/images`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});status(`${d.added.length} image(s) ajoutée(s) à ${d.plate_id}. Rechargement demandé.`);document.getElementById('plate-files').value='';setTimeout(loadPlates,1500)}catch(e){status('Ajout impossible : '+e,true)}finally{btn.disabled=false}
+}
+async function archivePlate(id){if(!confirm(`Archiver ${id} et la retirer immédiatement de la détection ?`))return;try{await api(`/plates/${encodeURIComponent(id)}`,{method:'DELETE'});status(`${id} archivée. Rechargement demandé.`);setTimeout(loadPlates,1500)}catch(e){status('Archivage impossible : '+e,true)}}
+async function restorePlate(id){try{const d=await api(`/plates/trash/${encodeURIComponent(id)}/restore`,{method:'POST'});status(`${d.plate_id} restaurée. Rechargement demandé.`);setTimeout(loadPlates,1500)}catch(e){status('Restauration impossible : '+e,true)}}
+loadPlates();setInterval(loadPlates,5000);
+</script>
+</body>
+</html>

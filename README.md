@@ -233,6 +233,17 @@ send_event("STEAM_CARD_BOUGIE", loxone_ip, loxone_port)
 ws://STYX_IP:8889
 ```
 
+Le tableau d'administration est servi par la Rule API :
+
+- `http://STYX_IP:8890/monitor` — état caméra/pipeline/détecteurs, FPS et commandes ;
+- `http://STYX_IP:8890/plates-ui` — templates réellement chargés, ajout,
+  archivage réversible et restauration avec rechargement à chaud ;
+- `http://STYX_IP:8890/logs-ui` — consultation du log courant et de ses rotations.
+
+Les modifications de plates faites depuis l'interface sont locales à STYX et
+peuvent rendre son clone Git non propre. Les suppressions sont déplacées dans
+`.runtime/plate_trash/` (gitignored), jamais effacées définitivement.
+
 Events émis :
 
 | type | Contenu |
@@ -244,6 +255,7 @@ Events émis :
 | `movement` | `direction, dx, dy, speed` |
 | `udp_sent` | Message envoyé à Loxone |
 | `status` | Message texte libre |
+| `templates_reloaded` | Liste et nombre de plates reprises à chaud |
 
 ---
 

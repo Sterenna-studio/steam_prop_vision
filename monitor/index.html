@@ -70,6 +70,12 @@ button:hover { background: #2e2e2e; border-color: var(--cyan); }
 button.primary { background: #004d5a; border-color: var(--cyan); color: var(--cyan); }
 button.primary:hover { background: #006070; }
 button.danger { border-color: var(--red); color: var(--red); }
+.health { display:inline-flex;align-items:center;gap:6px;font-weight:bold; }
+.health::before { content:'●'; color:var(--muted); }
+.health.on { color:var(--green); }
+.health.on::before { color:var(--green); }
+.health.off { color:var(--red); }
+.health.off::before { color:var(--red); }
 
 /* ── Grid layout ─────────────────────────────────────────────── */
 .grid {
@@ -204,6 +210,8 @@ button.danger { border-color: var(--red); color: var(--red); }
     <button onclick="disconnect()">✕</button>
     <span class="sep">|</span>
     <button onclick="openRuleEditor()" title="Rule Editor (port 8890)">⚙ Rules</button>
+    <button onclick="openPlates()" title="Templates de détection actifs">▦ Plates</button>
+    <button onclick="openLogs()" title="Historique des sessions">≡ Logs</button>
     <button onclick="reloadRules()" title="Recharger les règles sur le Pi">↺ Reload</button>
   </div>
 </div>
@@ -286,6 +294,12 @@ button.danger { border-color: var(--red); color: var(--red); }
     <div class="row"><span class="lbl">Heartbeat</span><span class="val ok" id="st-heart">—</span></div>
     <div class="row"><span class="lbl">Host connecté</span><span class="val" id="info-host">—</span></div>
     <div class="row"><span class="lbl">Rule API</span><span class="val" id="st-api">—</span></div>
+    <div class="row"><span class="lbl">Caméra</span><span class="health" id="health-camera">INCONNU</span></div>
+    <div class="row"><span class="lbl">Pipeline</span><span class="health" id="health-pipeline">INCONNU</span></div>
+    <div class="row"><span class="lbl">Détecteurs</span><span class="health" id="health-detectors">INCONNU</span></div>
+    <div class="row"><span class="lbl">Flux caméra</span><span class="health" id="health-frames">INCONNU</span></div>
+    <div class="row"><span class="lbl">Templates chargés</span><span class="val" id="health-templates">—</span></div>
+    <div class="row"><span class="lbl">FPS runtime</span><span class="val" id="health-fps">—</span></div>
   </div>
 
   <!-- Log complet -->
@@ -479,6 +493,16 @@ function handleMessage(d) {
       addLog('c-orange', `ADMIN → ${d.command}`);
       break;
 
+    case 'templates_reloaded':
+      addLog('c-green', `TEMPLATES ✓ ${d.count} plate(s) rechargée(s)`);
+      checkAPI();
+      break;
+
+    case 'templates_reload_error':
+      addLog('c-red', 'TEMPLATES ✗ échec du rechargement');
+      checkAPI();
+      break;
+
     case 'heartbeat': {
       const hbEl = document.getElementById('st-heart');
       if (hbEl) hbEl.textContent = ts();
@@ -503,9 +527,27 @@ async function checkAPI() {
     const r = await fetch(apiBase() + '/status', { signal: AbortSignal.timeout(2000) });
     const d = await r.json();
     set('st-api', `✓  ${d.rules ?? '?'} règles`);
+    updateHealth(d.runtime || {});
   } catch {
     set('st-api', '✗ indisponible');
+    updateHealth({});
   }
+}
+
+function health(id, value, onText, offText) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = value === true ? onText : value === false ? offText : 'INCONNU';
+  el.className = 'health ' + (value === true ? 'on' : value === false ? 'off' : '');
+}
+
+function updateHealth(rt) {
+  health('health-camera', rt.camera_on, 'CAM ON', 'CAM OFF');
+  health('health-pipeline', rt.pipeline_on, 'PIPELINE ON', 'PIPELINE OFF');
+  health('health-detectors', rt.detectors_ready, 'DETECTION ON', 'DETECTION OFF');
+  health('health-frames', rt.frame_recent, 'FRAMES OK', 'FRAMES STALE');
+  set('health-templates', rt.templates_loaded == null ? '—' : `${rt.templates_loaded} plate(s)`);
+  set('health-fps', rt.fps == null ? '—' : `${rt.fps} FPS`);
 }
 
 async function reloadRules() {
@@ -539,6 +581,9 @@ function openRuleEditor() {
   window.open(apiBase() + '/', '_blank');
 }
 
+function openPlates() { window.open(apiBase() + '/plates-ui', '_blank'); }
+function openLogs()   { window.open(apiBase() + '/logs-ui', '_blank'); }
+
 async function testCard() {
   const cardId = document.getElementById('test-card-sel').value;
   try {
@@ -563,6 +608,11 @@ async function testUDP() {
     addLog('c-orange', `UDP test envoyé → ${host}:7777  ${msg}`);
   } catch(e) { addLog('c-red', 'UDP test échoué : ' + e); }
 }
+
+if (location.protocol.startsWith('http') && location.hostname) {
+  document.getElementById('ws-host').value = location.hostname;
+}
+setInterval(checkAPI, 3000);
 </script>
 </body>
 </html>

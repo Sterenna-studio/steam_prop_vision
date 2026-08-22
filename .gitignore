@@ -18,6 +18,7 @@ assets/video/*.avi
 # Logs
 logs/
 *.log
+.runtime/
 
 # OS
 .DS_Store

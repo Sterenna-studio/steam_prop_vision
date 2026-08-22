@@ -57,6 +57,7 @@ from monitor.rule_api import start_in_thread as start_rule_api
 
 from apps.rpi.actions import run_actions, handle_loxone_command
 from apps.rpi.admin_controls import AdminControls
+from apps.rpi.runtime_status import runtime_status
 from apps.rpi.qr_flux import QRFluxChecker
 from apps.rpi.watchdog import Watchdog
 from apps.rpi.boot import boot_checks
@@ -170,7 +171,17 @@ def _apply_force_reset(video, audio, image, reset_fn) -> State:
 # ══════════════════════════════════════════════════════════════════
 
 
-def run_card_mode(cfg, cam, rule_engine, audio, video, image, watchdog, force_reset):
+def run_card_mode(
+    cfg,
+    cam,
+    rule_engine,
+    audio,
+    video,
+    image,
+    watchdog,
+    force_reset,
+    template_reload,
+):
     card_hold_ms = cfg.get("card_hold_ms", 1000)
     idle_after_s = cfg.get("idle_after_s", 3.0)
     card_min_area = cfg.get("card_min_area", 4000)
@@ -195,6 +206,8 @@ def run_card_mode(cfg, cam, rule_engine, audio, video, image, watchdog, force_re
         registry=template_registry,
     )
     qr_checker = QRFluxChecker(cfg.get("mission_id", ""))
+    runtime_status.set_detectors(True, recognizer.card_ids)
+    runtime_status.set_pipeline(True)
 
     state = State.IDLE
     last_triggered = 0.0
@@ -252,12 +265,27 @@ def run_card_mode(cfg, cam, rule_engine, audio, video, image, watchdog, force_re
         last_score_push = now
         push_event({"type": "score", "card_id": card_id, "score": round(score, 3)})
 
+    def _reload_templates():
+        runtime_status.set_detectors(False)
+        card_detector.reload()
+        recognizer.reload()
+        runtime_status.set_detectors(True, recognizer.card_ids)
+        log.info(f"[templates] {len(recognizer.card_ids)} plate(s) rechargée(s)")
+        push_event(
+            {
+                "type": "templates_reloaded",
+                "count": len(recognizer.card_ids),
+                "plate_ids": recognizer.card_ids,
+            }
+        )
+
     while flag.running:
         frame = cam.capture_array()
         if frame is None:
             time.sleep(0.01)
             continue
         watchdog.touch()
+        runtime_status.touch_frame()
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         frame = _rotate_frame(frame, camera_rotation)
         update_stream_frame(frame)
@@ -267,9 +295,23 @@ def run_card_mode(cfg, cam, rule_engine, audio, video, image, watchdog, force_re
         fps_count += 1
         if now - fps_last_push >= FPS_PUSH_INTERVAL:
             fps = fps_count / (now - fps_last_push)
+            runtime_status.set_fps(fps)
             push_event({"type": "fps", "value": round(fps, 1)})
             fps_count = 0
             fps_last_push = now
+
+        if template_reload.is_set():
+            template_reload.clear()
+            force_reset.clear()
+            state = _apply_force_reset(video, audio, image, _reset_detection)
+            try:
+                _reload_templates()
+            except Exception:
+                runtime_status.set_detectors(False)
+                log.exception("[templates] échec du rechargement")
+                push_event({"type": "templates_reload_error"})
+            watchdog.touch()
+            continue
 
         if force_reset.is_set():
             force_reset.clear()
@@ -396,6 +438,7 @@ def run_card_mode(cfg, cam, rule_engine, audio, video, image, watchdog, force_re
         log.info("[state] -> STANDBY (" + str(idle_after_s) + "s)")
 
     log.info("[stop] " + str(frame_count) + " frames traitees.")
+    runtime_status.set_pipeline(False)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -422,6 +465,8 @@ def run_person_mode(cfg, cam, rule_engine, audio, video, image, watchdog, force_
         persist_after_loss=persist,
         grace_frames=15,
     )
+    runtime_status.set_detectors(True)
+    runtime_status.set_pipeline(True)
 
     state = State.IDLE
     last_triggered = 0.0
@@ -439,6 +484,7 @@ def run_person_mode(cfg, cam, rule_engine, audio, video, image, watchdog, force_
             time.sleep(0.01)
             continue
         watchdog.touch()
+        runtime_status.touch_frame()
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         frame = _rotate_frame(frame, camera_rotation)
         update_stream_frame(frame)
@@ -478,6 +524,7 @@ def run_person_mode(cfg, cam, rule_engine, audio, video, image, watchdog, force_
             log.info("[state] -> STANDBY (" + str(idle_after_s) + "s)")
 
     log.info("[stop] " + str(frame_count) + " frames traitees.")
+    runtime_status.set_pipeline(False)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -501,6 +548,7 @@ def main():
     set_service_mode(service_mode)
 
     pipeline_mode = cfg.get("pipeline_mode", "card")
+    runtime_status.configure(pipeline_mode)
     monitor_on = cfg.get("enable_monitor", True)
     rule_api_on = cfg.get("enable_rule_api", True)
     heartbeat_on = cfg.get("enable_heartbeat", True)
@@ -538,12 +586,14 @@ def main():
     video = VideoPlayer("assets/video")
     image = ImagePlayer("assets/img")
     force_reset = threading.Event()
+    template_reload = threading.Event()
     watchdog = Watchdog(watchdog_timeout_s)
     admin_controls = AdminControls(
         audio=audio,
         video=video,
         image=image,
         force_scan=force_reset,
+        template_reload=template_reload,
         rule_engine=rule_engine,
         event_sink=push_event,
     )
@@ -577,18 +627,33 @@ def main():
         )
     )
     cam.start()
+    runtime_status.set_camera(True)
     log.info("[init] Camera OK")
 
-    if pipeline_mode == "person":
-        run_person_mode(
-            cfg, cam, rule_engine, audio, video, image, watchdog, force_reset
-        )
-    else:
-        run_card_mode(cfg, cam, rule_engine, audio, video, image, watchdog, force_reset)
-
-    cam.stop()
-    audio.stop()
-    video.stop()
+    try:
+        if pipeline_mode == "person":
+            run_person_mode(
+                cfg, cam, rule_engine, audio, video, image, watchdog, force_reset
+            )
+        else:
+            run_card_mode(
+                cfg,
+                cam,
+                rule_engine,
+                audio,
+                video,
+                image,
+                watchdog,
+                force_reset,
+                template_reload,
+            )
+    finally:
+        runtime_status.set_pipeline(False)
+        runtime_status.set_camera(False)
+        cam.stop()
+        audio.stop()
+        video.stop()
+        image.stop()
 
 
 if __name__ == "__main__":

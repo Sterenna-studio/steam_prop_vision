@@ -13,6 +13,9 @@
 | Démarrer/relancer via systemd | `sudo systemctl restart steam-vision` |
 | Lancer les tests | `pytest` puis `ruff check .` |
 | Voir le flux et les métriques | Ouvrir `/view` sur STYX |
+| Vérifier le démarrage complet | Ouvrir `:8890/monitor` et contrôler les badges verts |
+| Consulter les logs récents | Ouvrir `:8890/logs-ui` |
+| Gérer les templates actifs | Ouvrir `:8890/plates-ui` |
 | Ajouter une plaque | Voir [Ajouter une plaque](#ajouter-une-plaque) |
 | Déployer sur STYX | Voir [Déployer-sur-styx](#déployer-sur-styx) |
 
@@ -49,6 +52,24 @@ Interrompre le processus avec `Ctrl+C`. Vérifier qu’aucun processus de pipeli
 
 Si l’image est tournée, ajuster `camera_rotation` dans `config/features.yaml`, puis redémarrer le pipeline.
 
+### Contrôle de démarrage depuis le monitor
+
+Ouvrir `http://<ip-styx>:8890/monitor`. Le démarrage est complet quand les
+indicateurs affichent `CAM ON`, `PIPELINE ON`, `DETECTION ON` et `FRAMES OK`,
+avec un nombre de templates et des FPS non nuls. Un indicateur rouge permet de
+distinguer une API disponible d'une caméra ou d'une boucle figée.
+
+### Historique disponible
+
+`logs/steam_vision.log` et ses trois rotations conservent environ 8 Mio de logs
+récents et sont consultables sur `:8890/logs-ui`. Le journal systemd complète
+cet historique et permet de revenir aux boots précédents :
+
+```bash
+journalctl --list-boots
+journalctl -u steam-vision -b -1 --no-pager
+```
+
 ## Diagnostic rapide
 
 ### La caméra ne démarre pas
@@ -78,10 +99,17 @@ Vérifier dans cet ordre : orientation de l’image, éclairage, distance, angle
 ## Ajouter une plaque
 
 1. Préparer les visuels et templates de la plaque.
-2. Utiliser l’outil d’ajout du dépôt, notamment `add_plate.sh` lorsque ce flux correspond au poste utilisé.
-3. Vérifier la configuration associée.
-4. Tester la reconnaissance sous plusieurs distances, angles et éclairages.
-5. N’activer la plaque qu’après une reconnaissance répétable et une action validée.
+2. Ouvrir `http://<ip-styx>:8890/plates-ui`, saisir un identifiant `plate_nom`
+   et sélectionner les images. Le rechargement des descripteurs est automatique.
+3. Configurer les actions dans l'éditeur de règles `:8890/`.
+4. Vérifier que la plate apparaît `CHARGÉE`, puis tester la reconnaissance sous
+   plusieurs distances, angles et éclairages.
+5. N'activer la plaque qu'après une reconnaissance répétable et une action validée.
+
+L'action « Archiver » retire la plate de la détection mais conserve ses fichiers
+dans `.runtime/plate_trash/`. La section Archives de la même page permet de la
+restaurer. Ces opérations modifient le clone local de STYX : vérifier
+`git status` avant le prochain déploiement.
 
 ## Tests avant modification
 

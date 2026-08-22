@@ -10,7 +10,7 @@ from collections.abc import Callable
 from typing import Any
 
 
-VALID_ADMIN_COMMANDS = ("stop", "scan", "reset")
+VALID_ADMIN_COMMANDS = ("stop", "scan", "reset", "reload_templates")
 
 
 class UnknownAdminCommand(ValueError):
@@ -27,11 +27,13 @@ class AdminControls:
         video,
         image,
         force_scan,
+        template_reload,
         rule_engine,
         event_sink: Callable[[dict[str, Any]], None] | None = None,
     ) -> None:
         self._players = (audio, video, image)
         self._force_scan = force_scan
+        self._template_reload = template_reload
         self._rule_engine = rule_engine
         self._event_sink = event_sink
 
@@ -46,7 +48,10 @@ class AdminControls:
         if command == "reset":
             self._rule_engine.reset_runtime()
 
-        if command in ("scan", "reset"):
+        if command == "reload_templates":
+            self._template_reload.set()
+
+        if command in ("scan", "reset", "reload_templates"):
             self._force_scan.set()
 
         if self._event_sink:

@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S.T.E.A.M — Logs</title>
+<style>
+:root{--bg:#0e0e0e;--surface:#181818;--border:#333;--text:#ddd;--muted:#777;--cyan:#0df;--red:#f44336}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:13px 'Courier New',monospace;padding:18px}.header{display:flex;gap:8px;align-items:center;margin-bottom:14px}.header h1{font-size:17px;letter-spacing:2px;color:var(--cyan);margin:0;flex:1}button,select{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font:inherit}.info{color:var(--muted);margin-bottom:10px}pre{margin:0;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:12px;height:calc(100vh - 125px);overflow:auto;white-space:pre-wrap;font-size:11px;line-height:1.45}.error{color:var(--red)}
+</style>
+</head>
+<body>
+<div class="header"><h1>≡ HISTORIQUE DES LOGS</h1><select id="files" onchange="loadLog()"></select><button onclick="loadLog()">↻ Actualiser</button><button onclick="location.href='/monitor'">← Monitor</button></div>
+<div class="info" id="info">Chargement…</div><pre id="content"></pre>
+<script>
+async function loadFiles(){try{const r=await fetch('/logs/files');const d=await r.json();const s=document.getElementById('files');s.innerHTML=d.files.map(f=>`<option value="${f.name}">${f.name} — ${(f.size/1024).toFixed(1)} Kio</option>`).join('');document.getElementById('info').textContent=`Rétention locale : ${d.retention}. Les boots plus anciens restent consultables avec journalctl sur STYX.`;if(d.files.length)loadLog();else document.getElementById('content').textContent='Aucun log.'}catch(e){showError(e)}}
+async function loadLog(){try{const name=document.getElementById('files').value;if(!name)return;const r=await fetch('/logs/file/'+encodeURIComponent(name)+'?limit=3000');const d=await r.json();if(!r.ok)throw new Error(d.error||r.status);const pre=document.getElementById('content');pre.className='';pre.textContent=d.lines.join('\n');pre.scrollTop=pre.scrollHeight}catch(e){showError(e)}}
+function showError(e){const p=document.getElementById('content');p.className='error';p.textContent='Erreur : '+e}
+loadFiles();
+</script>
+</body>
+</html>
