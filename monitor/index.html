@@ -237,6 +237,14 @@ button.danger { border-color: var(--red); color: var(--red); }
 
     <!-- Admin actions -->
     <div style="margin-top:12px">
+      <div class="card-title" style="margin-bottom:8px">Contrôle pipeline</div>
+      <div class="admin-row">
+        <button onclick="runtimeControl('stop')" title="Arrêter immédiatement audio, vidéo et image">■ Stop actuel</button>
+        <button class="primary" onclick="runtimeControl('scan')" title="Arrêter les médias et revenir immédiatement au scan">↩ Retour au scan</button>
+        <button class="danger" onclick="runtimeControl('reset', true)" title="Retour au scan et remise à zéro des cooldowns">↺ Reset complet</button>
+      </div>
+    </div>
+    <div style="margin-top:12px">
       <div class="card-title" style="margin-bottom:8px">Tests rapides</div>
       <div class="admin-row">
         <select id="test-card-sel" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:var(--r);padding:4px 8px;font-size:12px;font-family:inherit">
@@ -467,6 +475,10 @@ function handleMessage(d) {
       addLog('c-orange', `UDP← ${d.from || '?'} : ${d.msg}`);
       break;
 
+    case 'admin_control':
+      addLog('c-orange', `ADMIN → ${d.command}`);
+      break;
+
     case 'heartbeat': {
       const hbEl = document.getElementById('st-heart');
       if (hbEl) hbEl.textContent = ts();
@@ -503,6 +515,24 @@ async function reloadRules() {
     addLog('c-green', `Rules rechargées — ${d.rules ?? ''} règles`);
     set('st-api', `✓  ${d.rules ?? '?'} règles`);
   } catch(e) { addLog('c-red', 'Reload échoué : ' + e); }
+}
+
+async function runtimeControl(command, confirmReset = false) {
+  if (confirmReset && !window.confirm('Reset complet : arrêter les médias, revenir au scan et effacer les cooldowns ?')) return;
+  try {
+    const r = await fetch(apiBase() + '/control/' + encodeURIComponent(command), {
+      method: 'POST',
+      signal: AbortSignal.timeout(3000)
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
+    const labels = {
+      stop: 'travail en cours arrêté',
+      scan: 'retour au scan demandé',
+      reset: 'reset complet demandé'
+    };
+    addLog('c-green', `ADMIN ✓ ${labels[command] || command}`);
+  } catch(e) { addLog('c-red', 'Commande admin échouée : ' + e); }
 }
 
 function openRuleEditor() {

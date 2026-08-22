@@ -260,6 +260,12 @@ class RuleEngine:
         """Appelé quand le label disparaît de la frame (détection perdue)."""
         self._first_seen.pop(label.lower(), None)
 
+    def reset_runtime(self) -> None:
+        """Efface cooldowns et détections temporaires sans recharger la config."""
+        with self._lock:
+            self._last_trigger.clear()
+            self._first_seen.clear()
+
     def get_actions(self, label: str) -> list[ActionDef]:
         return self.get_rule(label.lower()).actions
 

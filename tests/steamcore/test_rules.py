@@ -140,6 +140,15 @@ class TestRuleEngine:
         # Les règles doivent être inchangées
         assert engine._rules == original_rules
 
+    def test_reset_runtime_clears_cooldowns_and_pending_detections(self, engine):
+        engine.mark_triggered("plate_test", now=100.0)
+        engine._first_seen["plate_test"] = 99.0
+
+        engine.reset_runtime()
+
+        assert engine._last_trigger == {}
+        assert engine._first_seen == {}
+
 
 class TestTryTrigger:
     """try_trigger() : version atomique (verrouillée) de should_trigger()+

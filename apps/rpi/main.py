@@ -56,6 +56,7 @@ from monitor.ws_bridge import start_in_thread as start_ws
 from monitor.rule_api import start_in_thread as start_rule_api
 
 from apps.rpi.actions import run_actions, handle_loxone_command
+from apps.rpi.admin_controls import AdminControls
 from apps.rpi.qr_flux import QRFluxChecker
 from apps.rpi.watchdog import Watchdog
 from apps.rpi.boot import boot_checks
@@ -153,12 +154,13 @@ class _RunFlag:
         signal.signal(signal.SIGTERM, _stop)
 
 
-def _apply_force_reset(video, audio, reset_fn) -> State:
-    """Remet à IDLE sur réception de STEAM_RESET (voir apps/rpi/actions.py)."""
+def _apply_force_reset(video, audio, image, reset_fn) -> State:
+    """Remet à IDLE sur demande UDP ou depuis la page d'administration."""
     video.stop()
     audio.stop()
+    image.stop()
     reset_fn()
-    log.info("[state] -> IDLE (reset Loxone)")
+    log.info("[state] -> IDLE (reset forcé)")
     push_event({"type": "state", "state": "IDLE"})
     return State.IDLE
 
@@ -271,7 +273,7 @@ def run_card_mode(cfg, cam, rule_engine, audio, video, image, watchdog, force_re
 
         if force_reset.is_set():
             force_reset.clear()
-            state = _apply_force_reset(video, audio, _reset_detection)
+            state = _apply_force_reset(video, audio, image, _reset_detection)
             continue
 
         if state == State.STANDBY:
@@ -445,7 +447,7 @@ def run_person_mode(cfg, cam, rule_engine, audio, video, image, watchdog, force_
 
         if force_reset.is_set():
             force_reset.clear()
-            state = _apply_force_reset(video, audio, tracker.reset)
+            state = _apply_force_reset(video, audio, image, tracker.reset)
             continue
 
         if state == State.STANDBY:
@@ -537,11 +539,19 @@ def main():
     image = ImagePlayer("assets/img")
     force_reset = threading.Event()
     watchdog = Watchdog(watchdog_timeout_s)
+    admin_controls = AdminControls(
+        audio=audio,
+        video=video,
+        image=image,
+        force_scan=force_reset,
+        rule_engine=rule_engine,
+        event_sink=push_event,
+    )
 
     if monitor_on:
         start_ws()
     if rule_api_on:
-        start_rule_api(engine=rule_engine)
+        start_rule_api(engine=rule_engine, controls=admin_controls)
     if stream_on:
         start_mjpeg_server(port=stream_port)
     if heartbeat_on:

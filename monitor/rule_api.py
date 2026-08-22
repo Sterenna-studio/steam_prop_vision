@@ -9,6 +9,7 @@ Serveur FastAPI sur :8890
   GET  /assets     → liste des fichiers assets (audio/img/video)
   POST /test_card  → injecte un event card_detected sur le WS
   POST /test_udp   → envoie un paquet UDP de test
+  POST /control/x  → stop, retour au scan ou reset runtime
 
 Lancer: python monitor/rule_api.py
 Accéder depuis le réseau: http://<ip_pi>:8890
@@ -43,6 +44,7 @@ except ImportError:
     print("[rule_api] WARN: pip install fastapi uvicorn pyyaml")
 
 _engine_ref = None  # injecté depuis main.py
+_controls_ref = None  # injecté depuis main.py
 
 app = FastAPI(title="S.T.E.A.M Rule Editor") if _OK else None
 
@@ -106,6 +108,7 @@ if _OK:
             {
                 "status": "running",
                 "engine_attached": _engine_ref is not None,
+                "controls_attached": _controls_ref is not None,
                 "rules": rules_count,
                 "timestamp": time.time(),
             }
@@ -162,10 +165,43 @@ if _OK:
         except Exception as e:
             return JSONResponse({"status": "error", "detail": str(e)}, status_code=500)
 
+    # ── Runtime controls ─────────────────────────────────────────────
+    @app.post("/control/{command}")
+    def admin_control(command: str):
+        """Exécute une commande réelle sur le pipeline attaché."""
+        if _controls_ref is None:
+            return JSONResponse(
+                {"status": "error", "detail": "contrôles runtime non attachés"},
+                status_code=503,
+            )
+        try:
+            return JSONResponse(_controls_ref.execute(command))
+        except Exception as exc:
+            from apps.rpi.admin_controls import (
+                VALID_ADMIN_COMMANDS,
+                UnknownAdminCommand,
+            )
 
-def start_in_thread(port: int = 8890, engine=None) -> threading.Thread | None:
-    global _engine_ref
+            if isinstance(exc, UnknownAdminCommand):
+                return JSONResponse(
+                    {
+                        "status": "error",
+                        "detail": str(exc),
+                        "commands": list(VALID_ADMIN_COMMANDS),
+                    },
+                    status_code=400,
+                )
+            return JSONResponse(
+                {"status": "error", "detail": str(exc)}, status_code=500
+            )
+
+
+def start_in_thread(
+    port: int = 8890, engine=None, controls=None
+) -> threading.Thread | None:
+    global _engine_ref, _controls_ref
     _engine_ref = engine
+    _controls_ref = controls
     if not _OK:
         print("[rule_api] GUI désactivé (dépendances manquantes)")
         return None
