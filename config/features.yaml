@@ -28,6 +28,16 @@ card_score_threshold: 0.20  # score minimum ORB (0.0–1.0)
 card_consec_frames: 1       # nb de frames consécutives pour démarrer le hold — 1 bonne frame suffit, L2+L3 vérifient déjà géométrie+score
 card_miss_grace_frames: 5   # frames ratées d'affilée tolérées PENDANT le hold sans tout reset (bruit caméra isolé)
 
+# Modèle générique préparé pour benchmark/profils. Le runtime STYX actuel
+# continue volontairement d'utiliser card_score_threshold ci-dessus tant que
+# les mesures terrain n'ont pas validé une migration explicite.
+recognition:
+  default_threshold: 0.20
+  use_per_object_thresholds: false
+
+# Seuils optionnels par objet, sans activation automatique.
+objects: {}
+
 # ── Features optionnelles ─────────────────────────────────────────
 enable_heartbeat: true      # UDP heartbeat toutes les 5s (broadcast LAN)
 enable_monitor: true        # WebSocket monitor  ws://0.0.0.0:8889

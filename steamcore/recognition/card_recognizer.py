@@ -11,11 +11,14 @@ Logique de reconnaissance :
 """
 
 from __future__ import annotations
+
 from dataclasses import dataclass
+
 import cv2
 import numpy as np
 
 from .template_registry import TemplateRegistry
+from .thresholds import RecognitionThresholds
 
 _NFEATURES = 800
 _MIN_KEYPOINTS = 4
@@ -28,6 +31,17 @@ class RecognitionResult:
     score: float
     matches: int
     matched_img: str = ""  # nom de l'image qui a matché
+    threshold_used: float = 0.0
+
+
+@dataclass
+class RecognitionCandidate:
+    card_id: str
+    score: float
+    matches: int
+    matched_img: str
+    threshold_used: float
+    accepted: bool
 
 
 class CardRecognizer:
@@ -39,11 +53,14 @@ class CardRecognizer:
         platest_dir: str = "PLATEST",
         min_matches: int = 6,
         threshold: float = 0.03,
+        thresholds: RecognitionThresholds | None = None,
         registry: TemplateRegistry | None = None,
     ):
         self.platest_dir = platest_dir
         self.min_matches = min_matches
-        self.threshold = threshold
+        self.thresholds = thresholds or RecognitionThresholds(
+            default_threshold=threshold
+        )
         self._orb = cv2.ORB_create(nfeatures=_NFEATURES)
         self._matcher = cv2.BFMatcher(cv2.NORM_HAMMING)
         # Registre partagé avec CardDetector si fourni (évite de relire les
@@ -67,60 +84,107 @@ class CardRecognizer:
     def load_config(self, cfg: dict):
         det = cfg.get("detection", {})
         self.min_matches = det.get("min_matches", self.min_matches)
-        self.threshold = det.get("threshold", self.threshold)
+        legacy_default = det.get("threshold", self.threshold)
+        self.thresholds = RecognitionThresholds.from_config(cfg, legacy_default)
         self.reload()
 
     def recognize(self, warped: np.ndarray, hint_id: str | None = None):
+        candidates = self.recognize_candidates(
+            warped,
+            hint_ids=[hint_id] if hint_id else None,
+            fallback_on_unknown_hint=True,
+        )
+        accepted = next(
+            (candidate for candidate in candidates if candidate.accepted), None
+        )
+        if accepted is None:
+            return None
+
+        label = accepted.card_id.replace("plate_", "").replace("_", " ").capitalize()
+        return RecognitionResult(
+            card_id=accepted.card_id,
+            label=label,
+            score=round(accepted.score, 4),
+            matches=accepted.matches,
+            matched_img=accepted.matched_img,
+            threshold_used=accepted.threshold_used,
+        )
+
+    def recognize_candidates(
+        self,
+        warped: np.ndarray,
+        hint_ids: list[str] | None = None,
+        fallback_on_unknown_hint: bool = False,
+    ) -> list[RecognitionCandidate]:
+        """Score les candidats L3, y compris ceux situés sous leur seuil."""
         gray = self._to_gray(warped)
         gray = cv2.resize(gray, (self.WARP_SIZE, self.WARP_SIZE))
 
         kps_q, desc_q = self._orb.detectAndCompute(gray, None)
         if desc_q is None:
-            return None
+            self.last_score = 0.0
+            self.last_card_id = None
+            self.last_templates_scanned = 0
+            self.last_images_scanned = 0
+            return []
 
         templates = self._templates
-        if hint_id:
-            templates = [
-                t for t in self._templates if t.card_id == hint_id
-            ] or self._templates
+        if hint_ids:
+            requested = set(hint_ids)
+            filtered = [t for t in self._templates if t.card_id in requested]
+            if filtered or not fallback_on_unknown_hint:
+                templates = filtered
 
         self.last_templates_scanned = len(templates)
         self.last_images_scanned = sum(len(t.images) for t in templates)
 
-        best_score, best_matches, best_id, best_img = 0.0, 0, None, ""
-
+        candidates = []
         for tmpl in templates:
+            best_score, best_matches, best_img = 0.0, 0, ""
             # Tente chaque image du template — valide si UNE seule matche
             for img_name, kps_r, desc_r in tmpl.images:
                 try:
                     ms = self._matcher.knnMatch(desc_q, desc_r, k=2)
-                    good = [
-                        m for m, n in ms if m.distance < self.RATIO_TEST * n.distance
-                    ]
+                    good = []
+                    for pair in ms:
+                        if len(pair) == 2:
+                            match, neighbor = pair
+                            if match.distance < self.RATIO_TEST * neighbor.distance:
+                                good.append(match)
                     score = len(good) / max(len(kps_r), len(kps_q), 1)
-                    if score >= self.threshold and len(good) >= self.min_matches:
-                        if score > best_score:
-                            best_score = score
-                            best_matches = len(good)
-                            best_id = tmpl.card_id
-                            best_img = img_name
+                    if score > best_score:
+                        best_score = score
+                        best_matches = len(good)
+                        best_img = img_name
                 except Exception:
                     continue
+            threshold = self.thresholds.resolve(tmpl.card_id)
+            candidates.append(
+                RecognitionCandidate(
+                    card_id=tmpl.card_id,
+                    score=best_score,
+                    matches=best_matches,
+                    matched_img=best_img,
+                    threshold_used=threshold,
+                    accepted=(
+                        best_score >= threshold and best_matches >= self.min_matches
+                    ),
+                )
+            )
 
-        self.last_score = best_score
-        self.last_card_id = best_id
+        candidates.sort(key=lambda candidate: candidate.score, reverse=True)
+        best = candidates[0] if candidates else None
+        self.last_score = best.score if best else 0.0
+        self.last_card_id = best.card_id if best else None
+        return candidates
 
-        if best_id is None:
-            return None
+    @property
+    def threshold(self) -> float:
+        return self.thresholds.default_threshold
 
-        label = best_id.replace("plate_", "").replace("_", " ").capitalize()
-        return RecognitionResult(
-            card_id=best_id,
-            label=label,
-            score=round(best_score, 4),
-            matches=best_matches,
-            matched_img=best_img,
-        )
+    @threshold.setter
+    def threshold(self, value: float) -> None:
+        self.thresholds.default_threshold = float(value)
 
     def reload(self):
         self._registry.invalidate()
