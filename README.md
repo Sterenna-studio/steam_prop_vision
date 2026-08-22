@@ -17,8 +17,9 @@ steam_prop_vision/
 │   ├── detector.py                  ← Détection joueur YOLO
 │   ├── person_tracker.py            ← Gestion état joueur (presence/persistance/mouvement)
 │   └── recognition/
-│       ├── card_detector.py         ← Détection carte SIFT + homographie (v2, fond-indépendant)
+│       ├── card_detector.py         ← L2 ORB par défaut, SIFT/AKAZE optionnels
 │       └── card_recognizer.py       ← Identification carte ORB (confirmation)
+├── benchmark/                       ← Corpus, configs et rapports vision offline
 ├── monitor/
 │   └── ws_bridge.py                 ← WebSocket monitor (ws://STYX:8889)
 ├── config/
@@ -158,10 +159,11 @@ paramètres :
 
 ## Détection carte — `steamcore/recognition/`
 
-### `card_detector.py` (v2 — SIFT)
+### `card_detector.py` (L2 — ORB par défaut)
 
 Détecte une carte dans la frame **sans contrainte de fond**.  
-Utilise SIFT + matching BFMatcher + homographie RANSAC.  
+Utilise ORB par défaut + BFMatcher + homographie RANSAC. SIFT, AKAZE et
+MAGSAC sont accessibles explicitement pour benchmark, sans changer STYX.
 → Fonctionne sur fond variable (t-shirt joueur, table, etc.)
 
 ```python
@@ -364,7 +366,7 @@ et résultat du dernier test en temps réel.
 
 ---
 
-### `generate_samples.py` — Augmentation PLATEST
+### `generate_samples.py` — Augmentations de stress-test historiques
 
 ```bash
 # Toutes les cartes
@@ -378,8 +380,21 @@ python tools/generate_samples.py --all --count 15 --seed 42
 ```
 
 Génère N variations par image source : rotation, perspective, zoom,
-luminosité, contraste, flou, bruit, miroir.
+luminosité, contraste, flou, bruit, miroir. Une augmentation écrite dans
+`PLATEST` devient une référence runtime ; voir
+[`docs/TEMPLATE_POLICY.md`](docs/TEMPLATE_POLICY.md) avant utilisation.
 Produit une `preview_augmented.jpg` dans chaque dossier.
+
+### `vision_benchmark.py` — Comparaison reproductible A–E
+
+```bash
+python tools/vision_benchmark.py --variant all --homography all --report
+```
+
+Format du corpus, métriques et protocole terrain :
+[`docs/VISION_BENCHMARK.md`](docs/VISION_BENCHMARK.md). Architecture cible :
+[`docs/PERCEPTION_BACKENDS.md`](docs/PERCEPTION_BACKENDS.md). Fiducials :
+[`docs/FIDUCIAL_MARKERS.md`](docs/FIDUCIAL_MARKERS.md).
 
 ---
 
@@ -400,9 +415,9 @@ de `features.yaml` par onglets thématiques.
 1. Fabriquer les plaques (Mecpow laser)
 2. Photographier chaque plaque (10-15 photos, angles variés)
    → Copier dans PLATEST/plate_xxx/
-3. Générer les augmentations :
-   python tools/generate_samples.py --all --count 15
-4. Tester avec le bench :
+3. Capturer un corpus terrain séparé dans benchmark/corpus/
+4. Tester avec le benchmark reproductible puis le bench interactif :
+   python tools/vision_benchmark.py --variant all --homography all --report
    python tools/plate_bench.py --pi
    → Touche A pour sauvegarder les bons warps
    → Touche R pour recharger
