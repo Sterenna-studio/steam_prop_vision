@@ -1,0 +1,11 @@
+name: benchmark
+backend: image_match
+rules: config/rules.yaml
+
+recognition:
+  default_threshold: 0.20
+  use_per_object_thresholds: false
+
+objects: {}
+camera: {}
+benchmark_reference: null
