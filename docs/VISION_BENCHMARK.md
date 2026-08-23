@@ -1,11 +1,11 @@
 # Benchmark vision S.T.E.A.M Vision
 
-**STATUS: corpus terrain STYX à capturer.**
+**STATUS: pilote terrain STYX capturé ; corpus de référence encore incomplet.**
 
 Ce document décrit l'outil reproductible livré pour l'issue #9. Il ne contient
-aucun chiffre de performance inventé : recall, precision, latence, CPU, RAM et
-FPS sont **N/A — corpus terrain requis** tant qu'un corpus de référence n'a pas
-été capturé et rejoué sur STYX.
+aucun chiffre de performance inventé. Les mesures du 23 août 2026 ci-dessous
+proviennent d'un pilote réel sur STYX, mais ne constituent pas encore le corpus
+de référence complet.
 
 ## Principe
 
@@ -91,7 +91,7 @@ Avec `--report`, trois fichiers horodatés sont écrits dans
 
 - JSON : contexte, agrégats et détail par frame ;
 - CSV : détail tabulaire par frame ;
-- Markdown : tableau A–E, recall par objet, matrice de confusion et
+- Markdown : tableau A–E, recall par objet, métriques par condition, matrice de confusion et
   recommandations de seuil uniquement lorsque les classes observées sont
   séparables.
 
@@ -117,14 +117,68 @@ variante avec un recall élevé mais des déclenchements sur hard negatives doit
 
 | Champ | Valeur |
 |---|---|
-| Date terrain | N/A — corpus terrain requis |
-| Commit mesuré | N/A — généré au lancement |
-| Hardware | N/A — à renseigner sur STYX |
+| Date terrain | 2026-08-23 — pilote diagnostic |
+| Commit mesuré | `536cd21` |
+| Hardware | STYX — Raspberry Pi 5 / IMX708 |
 | Paramètres caméra | N/A — calibration STYX requise |
-| OpenCV | N/A — collecté automatiquement |
-| Nombre d'échantillons | 0 |
-| Recall / precision / FPR / FNR | N/A — corpus terrain requis |
+| OpenCV | 4.11.0 |
+| Nombre d'échantillons | 320 frames corrélées dans 16 séquences |
+| Objets | cellule, vampire, bougie, chaudron, dague |
+| Non mesurés | bois, ready-check, mouvements et conditions étendues |
 | Choix production | pipeline actuel inchangé |
+
+### Pilote occlusion du 23 août 2026
+
+Le corpus local non versionné contient 300 frames positives et 20 frames
+`aucune_plaque`. Pour chaque plaque disponible : 20 frames frontales, 20 avec
+un doigt sur le bord gauche et 20 avec l'angle supérieur gauche masqué. Il ne
+contient qu'un opérateur, une distance et une scène négative ; les frames d'une
+même capture sont corrélées. Ces résultats ne valident donc ni le seuil de 98 %
+ni une mise en production.
+
+Résultats `hybrid` + MAGSAC :
+
+| Variante | Recall | Precision | FPR négatifs | FNR | Latence p50/p95 propre |
+|---|---:|---:|---:|---:|---:|
+| A — ORB/ORB | 62.00 % | 100.00 % | 0.00 % sur 20 frames | 38.00 % | 124.33 / 140.32 ms |
+| B — SIFT/ORB | 61.00 % | 100.00 % | 0.00 % sur 20 frames | 39.00 % | N/A — service actif pendant ce run |
+| C — AKAZE/ORB | 46.33 % | 100.00 % | 0.00 % sur 20 frames | 53.67 % | 2371.83 / 3099.27 ms |
+| D — ORB/apparence | 50.33 % | 100.00 % | 0.00 % sur 20 frames | 49.67 % | 113.17 / 121.96 ms |
+| E — AKAZE/apparence | 25.00 % | 98.68 % | 0.00 % sur 20 frames | 75.00 % | 2370.91 / 3101.71 ms |
+
+La precision à 100 % des variantes A à D signifie seulement qu'aucune
+confusion finale n'a été observée dans ce petit pilote. Vingt frames négatives
+ne suffisent pas à estimer un faux-positive rate terrain robuste. La variante E
+a produit une confusion `plate_cellule → plate_bois`.
+
+| Objet | A — ORB/ORB | B — SIFT/ORB |
+|---|---:|---:|
+| plate_bougie | 46.67 % | 40.00 % |
+| plate_cellule | 75.00 % | 95.00 % |
+| plate_chaudron | 75.00 % | 53.33 % |
+| plate_dague | 50.00 % | 35.00 % |
+| plate_vampire | 63.33 % | 81.67 % |
+
+| Condition | L1 hit | A — ORB/ORB | B — SIFT/ORB |
+|---|---:|---:|---:|
+| frontal | 78.00 % | 72.00 % | 76.00 % |
+| doigt sur bord gauche | 10.00 % | 37.00 % | 36.00 % |
+| angle supérieur gauche masqué | 0.00 % | 77.00 % | 71.00 % |
+
+Le doigt casse principalement le quadrilatère L1. Le plein cadre récupère des
+frames de `plate_cellule`, mais n'améliore pas le corpus global : A passe de
+62.00 % en hybride à 62.67 % en plein cadre, tandis que B passe de 61.00 % à
+56.00 %. Le fallback doit donc être conditionné par une mesure de qualité L1
+et validé objet par objet, pas activé globalement.
+
+Sur la baseline A/hybride, RANSAC et MAGSAC donnent tous deux 62.00 % de recall.
+Dans le run propre avec le service arrêté, MAGSAC mesure 124.33/140.32 ms
+p50/p95 contre 157.85/419.22 ms pour RANSAC. Ce pilote justifie de poursuivre la
+mesure, pas de changer l'estimateur de production.
+
+Les rapports bruts restent sur STYX sous `.runtime/benchmark-reports-*` et le
+corpus sous `.runtime/benchmark-corpus`. Ils ne sont volontairement pas copiés
+dans `PLATEST` ni versionnés dans le dépôt public.
 
 ## Protocole terrain recommandé
 
