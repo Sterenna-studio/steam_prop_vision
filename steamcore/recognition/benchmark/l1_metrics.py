@@ -9,6 +9,7 @@ import math
 import numpy as np
 
 from .metrics import classify
+from ..temporal import TemporalCardValidator
 
 
 @dataclass
@@ -81,50 +82,26 @@ class HoldSimulator:
         consecutive_frames: int = 1,
         miss_grace_frames: int = 5,
     ):
-        if hold_ms < 0 or consecutive_frames < 1 or miss_grace_frames < 0:
-            raise ValueError("Configuration de hold invalide")
-        self.hold_ms = hold_ms
-        self.consecutive_frames = consecutive_frames
-        self.miss_grace_frames = miss_grace_frames
+        self.validator = TemporalCardValidator(
+            hold_ms, consecutive_frames, miss_grace_frames
+        )
         self.triggered = False
-        self.reset()
 
     def reset(self) -> None:
-        self.hold_card_id: str | None = None
-        self.hold_start_s: float | None = None
-        self.consecutive_card_id: str | None = None
-        self.consecutive_count = 0
-        self.miss_count = 0
+        self.validator.reset()
+        self.triggered = False
 
     def update(self, detected: str | None, timestamp_s: float) -> str | None:
         if self.triggered:
             return None
         if detected is None:
-            if self.consecutive_card_id is not None:
-                self.miss_count += 1
-                if self.miss_count > self.miss_grace_frames:
-                    self.reset()
+            self.validator.register_miss()
             return None
-        if detected != self.consecutive_card_id:
-            self.consecutive_card_id = detected
-            self.consecutive_count = 1
-            self.hold_card_id = None
-            self.hold_start_s = None
-            self.miss_count = 0
-            return None
-
-        self.miss_count = 0
-        self.consecutive_count += 1
-        if self.consecutive_count < self.consecutive_frames:
-            return None
-        if self.hold_card_id is None:
-            self.hold_card_id = detected
-            self.hold_start_s = timestamp_s
-        elapsed_ms = (timestamp_s - self.hold_start_s) * 1000.0
-        if elapsed_ms < self.hold_ms:
-            return None
-        self.triggered = True
-        return detected
+        decision = self.validator.register_detection(detected, timestamp_s)
+        if decision.triggered:
+            self.triggered = True
+            return detected
+        return None
 
 
 class L1MetricsAccumulator:
