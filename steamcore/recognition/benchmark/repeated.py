@@ -70,15 +70,24 @@ class RepeatedBenchmarkRunner:
         self.run_rows: list[dict] = []
         self.execution_orders: list[list[str]] = []
 
-    def run(self) -> list[dict]:
-        self.run_rows.clear()
-        self.execution_orders.clear()
+    def run(
+        self,
+        *,
+        on_progress: Callable[[dict], None] | None = None,
+        on_checkpoint: Callable[[RepeatedBenchmarkRunner], None] | None = None,
+    ) -> list[dict]:
         configurations = [
             (variant, homography)
             for variant in self.variants
             for homography in self.homographies
         ]
-        if self.repeated_options.warmup_frames:
+        self.execution_orders = self._build_execution_orders(configurations)
+        completed = {
+            (row["run_index"], row["variant"], row["homography_requested"])
+            for row in self.run_rows
+        }
+        total = len(configurations) * self.repeated_options.runs
+        if self.repeated_options.warmup_frames and not completed:
             warmup_options = replace(
                 self.benchmark_options,
                 limit=self.repeated_options.warmup_frames,
@@ -90,13 +99,29 @@ class RepeatedBenchmarkRunner:
                     variant, homography, warmup_options, self.thresholds
                 ).run()
 
-        for run_index in range(1, self.repeated_options.runs + 1):
-            ordered = configurations.copy()
-            random.Random(self.repeated_options.seed + run_index).shuffle(ordered)
-            self.execution_orders.append(
-                [f"{variant.code}/{homography}" for variant, homography in ordered]
-            )
+        for run_index, ordered_names in enumerate(self.execution_orders, start=1):
+            by_name = {
+                f"{variant.code}/{homography}": (variant, homography)
+                for variant, homography in configurations
+            }
+            ordered = [by_name[name] for name in ordered_names]
             for order_index, (variant, homography) in enumerate(ordered, start=1):
+                key = (run_index, variant.code, homography)
+                if key in completed:
+                    continue
+                position = len(self.run_rows) + 1
+                if on_progress:
+                    on_progress(
+                        {
+                            "status": "starting",
+                            "completed": position - 1,
+                            "total": total,
+                            "run_index": run_index,
+                            "order_index": order_index,
+                            "variant": variant.code,
+                            "homography": homography,
+                        }
+                    )
                 started = time.perf_counter()
                 metrics = self.runner_factory(
                     variant,
@@ -109,18 +134,65 @@ class RepeatedBenchmarkRunner:
                     raise RuntimeError(
                         "Une exécution répétée doit produire une configuration"
                     )
-                self.run_rows.append(
-                    {
-                        "run_index": run_index,
-                        "order_index": order_index,
-                        "variant": variant.code,
-                        "backend": variant.l2_backend,
-                        "homography_requested": homography,
-                        "wall_time_s": time.perf_counter() - started,
-                        **summaries[0],
-                    }
-                )
+                row = {
+                    "run_index": run_index,
+                    "order_index": order_index,
+                    "variant": variant.code,
+                    "backend": variant.l2_backend,
+                    "homography_requested": homography,
+                    "wall_time_s": time.perf_counter() - started,
+                    **summaries[0],
+                }
+                self.run_rows.append(row)
+                if on_checkpoint:
+                    on_checkpoint(self)
+                if on_progress:
+                    on_progress(
+                        {
+                            "status": "completed",
+                            "completed": len(self.run_rows),
+                            "total": total,
+                            "run_index": run_index,
+                            "order_index": order_index,
+                            "variant": variant.code,
+                            "homography": homography,
+                            "wall_time_s": row["wall_time_s"],
+                        }
+                    )
         return self.run_rows
+
+    def restore(self, rows: list[dict]) -> None:
+        """Restaure uniquement des résultats compatibles et aux positions prévues."""
+        configurations = [
+            (variant, homography)
+            for variant in self.variants
+            for homography in self.homographies
+        ]
+        orders = self._build_execution_orders(configurations)
+        valid_positions = {
+            (run_index, order_index): name
+            for run_index, order in enumerate(orders, start=1)
+            for order_index, name in enumerate(order, start=1)
+        }
+        seen = set()
+        restored = []
+        for row in rows:
+            position = (int(row["run_index"]), int(row["order_index"]))
+            expected = valid_positions.get(position)
+            actual = f"{row['variant']}/{row['homography_requested']}"
+            if expected != actual:
+                raise ValueError(
+                    f"Checkpoint incompatible à la position {position}: "
+                    f"{actual}, attendu {expected}"
+                )
+            key = (position[0], row["variant"], row["homography_requested"])
+            if key in seen:
+                raise ValueError(f"Résultat dupliqué dans le checkpoint: {key}")
+            seen.add(key)
+            restored.append(dict(row))
+        restored.sort(key=lambda row: (row["run_index"], row["order_index"]))
+        self.run_rows = restored
+        self.execution_orders = orders
 
     def aggregate(self) -> list[dict]:
         groups: dict[tuple[str, str, str], list[dict]] = {}
@@ -166,6 +238,16 @@ class RepeatedBenchmarkRunner:
     ) -> VisionBenchmarkRunner:
         return VisionBenchmarkRunner([variant], [homography], options, thresholds)
 
+    def _build_execution_orders(self, configurations) -> list[list[str]]:
+        orders = []
+        for run_index in range(1, self.repeated_options.runs + 1):
+            ordered = configurations.copy()
+            random.Random(self.repeated_options.seed + run_index).shuffle(ordered)
+            orders.append(
+                [f"{variant.code}/{homography}" for variant, homography in ordered]
+            )
+        return orders
+
 
 def build_repeated_report(
     runner: RepeatedBenchmarkRunner, context: RepeatedReportContext
@@ -182,6 +264,53 @@ def build_repeated_report(
         "aggregate": runner.aggregate(),
         "runs": runner.run_rows,
     }
+
+
+def build_repeated_checkpoint(
+    runner: RepeatedBenchmarkRunner,
+    context: RepeatedReportContext,
+    *,
+    status: str = "running",
+) -> dict:
+    if status not in {"running", "complete"}:
+        raise ValueError("Statut checkpoint invalide")
+    return {
+        "checkpoint_version": 1,
+        "status": status,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "configuration": asdict(context),
+        "execution_orders": runner.execution_orders,
+        "completed": len(runner.run_rows),
+        "total": len(context.variants) * len(context.homographies) * context.runs,
+        "runs": runner.run_rows,
+    }
+
+
+def restore_repeated_checkpoint(
+    runner: RepeatedBenchmarkRunner,
+    checkpoint: dict,
+    context: RepeatedReportContext,
+) -> None:
+    if checkpoint.get("checkpoint_version") != 1:
+        raise ValueError("Version de checkpoint non supportée")
+    if checkpoint.get("configuration") != asdict(context):
+        raise ValueError("Checkpoint incompatible avec la configuration demandée")
+    rows = checkpoint.get("runs")
+    if not isinstance(rows, list):
+        raise ValueError("Checkpoint invalide: liste runs absente")
+    runner.restore(rows)
+
+
+def write_repeated_checkpoint(checkpoint: dict, path: str | Path) -> Path:
+    """Écriture atomique : un arrêt ne peut pas laisser un JSON partiel."""
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_suffix(target.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(checkpoint, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    temporary.replace(target)
+    return target
 
 
 def write_repeated_reports(
