@@ -176,9 +176,10 @@ Dans le run propre avec le service arrêté, MAGSAC mesure 124.33/140.32 ms
 p50/p95 contre 157.85/419.22 ms pour RANSAC. Ce pilote justifie de poursuivre la
 mesure, pas de changer l'estimateur de production.
 
-Les rapports bruts restent sur STYX sous `.runtime/benchmark-reports-*` et le
-corpus sous `.runtime/benchmark-corpus`. Ils ne sont volontairement pas copiés
-dans `PLATEST` ni versionnés dans le dépôt public.
+Les rapports bruts expurgés d'images sont publiés dans
+[`benchmark/reports/2026-08-23-styx-pilot/`](../benchmark/reports/2026-08-23-styx-pilot/).
+Le corpus reste privé sur STYX sous `.runtime/benchmark-corpus` et n'est
+volontairement ni copié dans `PLATEST`, ni versionné dans le dépôt public.
 
 ## Protocole terrain recommandé
 
