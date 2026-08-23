@@ -52,6 +52,7 @@ from steamcore.recognition.fast_detector import FastDetector
 from steamcore.recognition.card_detector import CardDetector
 from steamcore.recognition.card_recognizer import CardRecognizer
 from steamcore.recognition.template_registry import TemplateRegistry
+from steamcore.recognition.temporal import TemporalCardValidator, TemporalStatus
 from monitor.ws_bridge import start_in_thread as start_ws
 from monitor.rule_api import start_in_thread as start_rule_api
 
@@ -211,11 +212,7 @@ def run_card_mode(
 
     state = State.IDLE
     last_triggered = 0.0
-    hold_card_id = None
-    hold_start = 0.0
-    consec_card_id = None
-    consec_count = 0
-    miss_count = 0
+    temporal = TemporalCardValidator(card_hold_ms, consec_required, miss_grace)
     frame_count = 0
 
     fps_count = 0
@@ -236,12 +233,7 @@ def run_card_mode(
     flag = _RunFlag()
 
     def _reset_detection():
-        nonlocal hold_card_id, hold_start, consec_card_id, consec_count, miss_count
-        hold_card_id = None
-        hold_start = 0.0
-        consec_card_id = None
-        consec_count = 0
-        miss_count = 0
+        temporal.reset()
 
     def _register_miss():
         """Frame sans détection valide (L1/L2/L3 en échec). Tolère jusqu'à
@@ -251,12 +243,7 @@ def run_card_mode(
         sur l'horloge murale (hold_start ne bouge pas ici) : les frames
         ratées tolérées ne rallongent pas artificiellement le hold, elles
         laissent juste le temps continuer à s'écouler."""
-        nonlocal miss_count
-        if consec_card_id is None:
-            return
-        miss_count += 1
-        if miss_count > miss_grace:
-            _reset_detection()
+        temporal.register_miss()
 
     def _push_score(now, card_id, score):
         nonlocal last_score_push
@@ -363,25 +350,13 @@ def run_card_mode(
             _register_miss()
             continue
 
-        if result.card_id != consec_card_id:
-            # Carte différente reconnue avec confiance : changement réel,
-            # traité immédiatement (pas de tolérance ici, contrairement aux
-            # "pas de détection" — voir _register_miss()).
-            consec_card_id = result.card_id
-            consec_count = 1
-            hold_card_id = None
-            hold_start = 0.0
-            miss_count = 0
+        temporal_decision = temporal.register_detection(result.card_id, now)
+        if temporal_decision.status in {
+            TemporalStatus.NEW_CANDIDATE,
+            TemporalStatus.ACCUMULATING,
+        }:
             continue
-
-        miss_count = 0  # bonne frame -> le compteur de ratées repart à zéro
-        consec_count += 1
-        if consec_count < consec_required:
-            continue
-
-        if hold_card_id is None:
-            hold_card_id = result.card_id
-            hold_start = now
+        if temporal_decision.hold_started:
             push_event(
                 {
                     "type": "card_detected",
@@ -399,7 +374,7 @@ def run_card_mode(
                 + str(round(result.score, 3))
             )
 
-        held_ms = (now - hold_start) * 1000
+        held_ms = temporal_decision.held_ms
         pct = min(100, int(held_ms / card_hold_ms * 100))
         push_event(
             {
@@ -412,7 +387,7 @@ def run_card_mode(
             }
         )
 
-        if held_ms < card_hold_ms:
+        if not temporal_decision.triggered:
             continue
 
         if result.card_id == READY_CHECK_CARD_ID:
