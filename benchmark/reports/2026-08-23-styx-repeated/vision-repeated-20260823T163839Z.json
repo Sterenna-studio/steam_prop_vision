@@ -1,0 +1,2724 @@
+{
+  "report_type": "vision_repeated_benchmark",
+  "generated_at": "2026-08-23T16:38:39.266121+00:00",
+  "git_commit": "ed3a6f161fab545b01b0a7d5c01437b68b160b4d",
+  "opencv_version": "4.11.0",
+  "platform": "Linux-6.18.39+rpt-rpi-2712-aarch64-with-glibc2.41",
+  "hardware": "STYX Raspberry Pi 5 / IMX708",
+  "configuration": {
+    "corpus": "/home/steam/steam_prop_vision/.runtime/benchmark-corpus",
+    "templates": "/home/steam/steam_prop_vision/PLATEST",
+    "roi_mode": "hybrid",
+    "variants": [
+      "A",
+      "B"
+    ],
+    "homographies": [
+      "ransac",
+      "magsac"
+    ],
+    "runs": 5,
+    "warmup_frames": 10,
+    "seed": 9,
+    "top_k": 2,
+    "top2_margin": 0.1,
+    "camera_rotation": 0,
+    "hardware": "STYX Raspberry Pi 5 / IMX708"
+  },
+  "execution_orders": [
+    [
+      "B/magsac",
+      "B/ransac",
+      "A/magsac",
+      "A/ransac"
+    ],
+    [
+      "A/ransac",
+      "A/magsac",
+      "B/ransac",
+      "B/magsac"
+    ],
+    [
+      "A/ransac",
+      "B/ransac",
+      "A/magsac",
+      "B/magsac"
+    ],
+    [
+      "B/magsac",
+      "A/ransac",
+      "A/magsac",
+      "B/ransac"
+    ],
+    [
+      "A/magsac",
+      "B/magsac",
+      "B/ransac",
+      "A/ransac"
+    ]
+  ],
+  "aggregate": [
+    {
+      "variant": "A",
+      "backend": "orb",
+      "homography_requested": "magsac",
+      "runs": 5,
+      "recall": {
+        "mean": 0.6233333333333333,
+        "std": 0.0,
+        "min": 0.6233333333333333,
+        "max": 0.6233333333333333,
+        "p50": 0.6233333333333333
+      },
+      "precision": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0,
+        "p50": 1.0
+      },
+      "false_positive_rate": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "p50": 0.0
+      },
+      "false_negative_rate": {
+        "mean": 0.37666666666666665,
+        "std": 0.0,
+        "min": 0.37666666666666665,
+        "max": 0.37666666666666665,
+        "p50": 0.37666666666666665
+      },
+      "l1_hit_rate": {
+        "mean": 0.25,
+        "std": 0.0,
+        "min": 0.25,
+        "max": 0.25,
+        "p50": 0.25
+      },
+      "l2_success_rate": {
+        "mean": 0.61875,
+        "std": 0.0,
+        "min": 0.61875,
+        "max": 0.61875,
+        "p50": 0.61875
+      },
+      "l3_success_rate": {
+        "mean": 0.584375,
+        "std": 0.0,
+        "min": 0.584375,
+        "max": 0.584375,
+        "p50": 0.584375
+      },
+      "latency_ms_p50": {
+        "mean": 123.098292000941,
+        "std": 0.1493100712064127,
+        "min": 122.895647000405,
+        "max": 123.32947499817237,
+        "p50": 123.13726350839715
+      },
+      "latency_ms_p95": {
+        "mean": 138.74974300095346,
+        "std": 0.18540567643624709,
+        "min": 138.55220415935037,
+        "max": 139.10131879383698,
+        "p50": 138.71163285148214
+      },
+      "cpu_percent_mean": {
+        "mean": 315.57710915949576,
+        "std": 0.06452097318389137,
+        "min": 315.50417302650555,
+        "max": 315.6756001717921,
+        "p50": 315.57984220705583
+      },
+      "fps_mean": {
+        "mean": 8.8420972293276,
+        "std": 0.007970246326606948,
+        "min": 8.833732516753093,
+        "max": 8.856047209689711,
+        "p50": 8.838989753269676
+      },
+      "wall_time_s": {
+        "mean": 44.9828258161986,
+        "std": 0.02691229393847746,
+        "min": 44.94199126699823,
+        "max": 45.01707444699423,
+        "p50": 44.98077566199936
+      }
+    },
+    {
+      "variant": "A",
+      "backend": "orb",
+      "homography_requested": "ransac",
+      "runs": 5,
+      "recall": {
+        "mean": 0.6233333333333333,
+        "std": 0.0,
+        "min": 0.6233333333333333,
+        "max": 0.6233333333333333,
+        "p50": 0.6233333333333333
+      },
+      "precision": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0,
+        "p50": 1.0
+      },
+      "false_positive_rate": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "p50": 0.0
+      },
+      "false_negative_rate": {
+        "mean": 0.37666666666666665,
+        "std": 0.0,
+        "min": 0.37666666666666665,
+        "max": 0.37666666666666665,
+        "p50": 0.37666666666666665
+      },
+      "l1_hit_rate": {
+        "mean": 0.25,
+        "std": 0.0,
+        "min": 0.25,
+        "max": 0.25,
+        "p50": 0.25
+      },
+      "l2_success_rate": {
+        "mean": 0.640625,
+        "std": 0.0,
+        "min": 0.640625,
+        "max": 0.640625,
+        "p50": 0.640625
+      },
+      "l3_success_rate": {
+        "mean": 0.584375,
+        "std": 0.0,
+        "min": 0.584375,
+        "max": 0.584375,
+        "p50": 0.584375
+      },
+      "latency_ms_p50": {
+        "mean": 155.89602759864647,
+        "std": 0.19365971517803404,
+        "min": 155.72656749282032,
+        "max": 156.27160100120818,
+        "p50": 155.81140050198883
+      },
+      "latency_ms_p95": {
+        "mean": 413.75248325246514,
+        "std": 1.6823137071739258,
+        "min": 412.63556800331577,
+        "max": 417.09585574790265,
+        "p50": 412.909624051099
+      },
+      "cpu_percent_mean": {
+        "mean": 263.6282568674309,
+        "std": 0.08302125721499064,
+        "min": 263.48947459109456,
+        "max": 263.7305359040594,
+        "p50": 263.6626134129768
+      },
+      "fps_mean": {
+        "mean": 6.745234773528774,
+        "std": 0.003517219822405288,
+        "min": 6.740369450413148,
+        "max": 6.749886326592771,
+        "p50": 6.74409618775626
+      },
+      "wall_time_s": {
+        "mean": 65.33236250700138,
+        "std": 0.03581942249380563,
+        "min": 65.27718411100795,
+        "max": 65.38925108499825,
+        "p50": 65.3292629350035
+      }
+    },
+    {
+      "variant": "B",
+      "backend": "sift",
+      "homography_requested": "magsac",
+      "runs": 5,
+      "recall": {
+        "mean": 0.6033333333333334,
+        "std": 0.0,
+        "min": 0.6033333333333334,
+        "max": 0.6033333333333334,
+        "p50": 0.6033333333333334
+      },
+      "precision": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0,
+        "p50": 1.0
+      },
+      "false_positive_rate": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "p50": 0.0
+      },
+      "false_negative_rate": {
+        "mean": 0.39666666666666667,
+        "std": 0.0,
+        "min": 0.39666666666666667,
+        "max": 0.39666666666666667,
+        "p50": 0.39666666666666667
+      },
+      "l1_hit_rate": {
+        "mean": 0.25,
+        "std": 0.0,
+        "min": 0.25,
+        "max": 0.25,
+        "p50": 0.25
+      },
+      "l2_success_rate": {
+        "mean": 0.590625,
+        "std": 0.0,
+        "min": 0.590625,
+        "max": 0.590625,
+        "p50": 0.590625
+      },
+      "l3_success_rate": {
+        "mean": 0.565625,
+        "std": 0.0,
+        "min": 0.565625,
+        "max": 0.565625,
+        "p50": 0.565625
+      },
+      "latency_ms_p50": {
+        "mean": 477.6469296994037,
+        "std": 0.34467025617458974,
+        "min": 476.9918064994272,
+        "max": 478.01681499549886,
+        "p50": 477.75071900105104
+      },
+      "latency_ms_p95": {
+        "mean": 508.08829266767134,
+        "std": 0.5536356137513199,
+        "min": 507.6118411401694,
+        "max": 509.01581830185023,
+        "p50": 507.76590723908157
+      },
+      "cpu_percent_mean": {
+        "mean": 300.60384504200954,
+        "std": 0.32663272761881346,
+        "min": 300.08790090066066,
+        "max": 300.9989426775043,
+        "p50": 300.6515088646512
+      },
+      "fps_mean": {
+        "mean": 2.2942157832304266,
+        "std": 0.0019611190694971744,
+        "min": 2.2918904668442868,
+        "max": 2.297054208895138,
+        "p50": 2.29439272466871
+      },
+      "wall_time_s": {
+        "mean": 174.86020864979656,
+        "std": 0.14990658205252036,
+        "min": 174.63232696900377,
+        "max": 175.0925626919925,
+        "p50": 174.85074283998983
+      }
+    },
+    {
+      "variant": "B",
+      "backend": "sift",
+      "homography_requested": "ransac",
+      "runs": 5,
+      "recall": {
+        "mean": 0.6,
+        "std": 0.0,
+        "min": 0.6,
+        "max": 0.6,
+        "p50": 0.6
+      },
+      "precision": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0,
+        "p50": 1.0
+      },
+      "false_positive_rate": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "p50": 0.0
+      },
+      "false_negative_rate": {
+        "mean": 0.4,
+        "std": 0.0,
+        "min": 0.4,
+        "max": 0.4,
+        "p50": 0.4
+      },
+      "l1_hit_rate": {
+        "mean": 0.25,
+        "std": 0.0,
+        "min": 0.25,
+        "max": 0.25,
+        "p50": 0.25
+      },
+      "l2_success_rate": {
+        "mean": 0.609375,
+        "std": 0.0,
+        "min": 0.609375,
+        "max": 0.609375,
+        "p50": 0.609375
+      },
+      "l3_success_rate": {
+        "mean": 0.5625,
+        "std": 0.0,
+        "min": 0.5625,
+        "max": 0.5625,
+        "p50": 0.5625
+      },
+      "latency_ms_p50": {
+        "mean": 1279.2040813990752,
+        "std": 2.2064574514290554,
+        "min": 1275.800765499298,
+        "max": 1281.4271180031938,
+        "p50": 1279.89500399417
+      },
+      "latency_ms_p95": {
+        "mean": 1723.7987773909117,
+        "std": 1.80347412460207,
+        "min": 1721.8630408482568,
+        "max": 1726.7864142464532,
+        "p50": 1723.6016249524255
+      },
+      "cpu_percent_mean": {
+        "mean": 172.78280944086964,
+        "std": 0.19411495430588646,
+        "min": 172.4869106960788,
+        "max": 173.01284741509897,
+        "p50": 172.88036009810588
+      },
+      "fps_mean": {
+        "mean": 0.8058512645096243,
+        "std": 0.0010402650093052877,
+        "min": 0.8048369680825125,
+        "max": 0.8074438150075206,
+        "p50": 0.8051788001536838
+      },
+      "wall_time_s": {
+        "mean": 442.997434282396,
+        "std": 0.5534548440944713,
+        "min": 442.1998459759925,
+        "max": 443.49659053000505,
+        "p50": 443.3579695019871
+      }
+    }
+  ],
+  "runs": [
+    {
+      "run_index": 1,
+      "order_index": 1,
+      "variant": "B",
+      "backend": "sift",
+      "homography_requested": "magsac",
+      "wall_time_s": 174.80640534500708,
+      "samples": 320,
+      "positive_samples": 300,
+      "negative_samples": 20,
+      "recall": 0.6033333333333334,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.39666666666666667,
+      "true_positives": 181,
+      "true_negatives": 20,
+      "false_positives": 0,
+      "false_negatives": 119,
+      "l1_hit_rate": 0.25,
+      "l2_success_rate": 0.590625,
+      "l3_success_rate": 0.565625,
+      "latency_ms_p50": 478.01681499549886,
+      "latency_ms_p95": 509.01581830185023,
+      "time_to_first_detection_p50": 0.0,
+      "time_to_first_detection_p95": 1.3999999999999986,
+      "longest_miss_streak": 20,
+      "fps_mean": 2.295528586301828,
+      "cpu_percent_mean": 300.9989426775043,
+      "ram_mb_peak": 3247.578125,
+      "recall_by_object": {
+        "plate_bougie": {
+          "samples": 60,
+          "recall": 0.36666666666666664
+        },
+        "plate_cellule": {
+          "samples": 60,
+          "recall": 0.95
+        },
+        "plate_chaudron": {
+          "samples": 60,
+          "recall": 0.5333333333333333
+        },
+        "plate_dague": {
+          "samples": 60,
+          "recall": 0.31666666666666665
+        },
+        "plate_vampire": {
+          "samples": 60,
+          "recall": 0.85
+        }
+      },
+      "metrics_by_condition": {
+        "aucune_plaque": {
+          "samples": 20,
+          "positive_samples": 0,
+          "negative_samples": 20,
+          "recall": null,
+          "precision": null,
+          "false_positive_rate": 0.0,
+          "l1_hit_rate": 0.1
+        },
+        "frontal": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.76,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.78
+        },
+        "main_sur_bord": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.38,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        },
+        "occlusion_angle": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.67,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        }
+      },
+      "confusion": {
+        "<negative>": {
+          "<none>": 20
+        },
+        "plate_bougie": {
+          "<none>": 38,
+          "plate_bougie": 22
+        },
+        "plate_cellule": {
+          "plate_cellule": 57,
+          "<none>": 3
+        },
+        "plate_chaudron": {
+          "plate_chaudron": 32,
+          "<none>": 28
+        },
+        "plate_dague": {
+          "<none>": 41,
+          "plate_dague": 19
+        },
+        "plate_vampire": {
+          "plate_vampire": 51,
+          "<none>": 9
+        }
+      }
+    },
+    {
+      "run_index": 1,
+      "order_index": 2,
+      "variant": "B",
+      "backend": "sift",
+      "homography_requested": "ransac",
+      "wall_time_s": 442.4592618040042,
+      "samples": 320,
+      "positive_samples": 300,
+      "negative_samples": 20,
+      "recall": 0.6,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.4,
+      "true_positives": 180,
+      "true_negatives": 20,
+      "false_positives": 0,
+      "false_negatives": 120,
+      "l1_hit_rate": 0.25,
+      "l2_success_rate": 0.609375,
+      "l3_success_rate": 0.5625,
+      "latency_ms_p50": 1277.5486659957096,
+      "latency_ms_p95": 1721.8630408482568,
+      "time_to_first_detection_p50": 0.0,
+      "time_to_first_detection_p95": 1.0,
+      "longest_miss_streak": 20,
+      "fps_mean": 0.806731765122132,
+      "cpu_percent_mean": 172.62928500471725,
+      "ram_mb_peak": 3247.578125,
+      "recall_by_object": {
+        "plate_bougie": {
+          "samples": 60,
+          "recall": 0.35
+        },
+        "plate_cellule": {
+          "samples": 60,
+          "recall": 0.95
+        },
+        "plate_chaudron": {
+          "samples": 60,
+          "recall": 0.5
+        },
+        "plate_dague": {
+          "samples": 60,
+          "recall": 0.35
+        },
+        "plate_vampire": {
+          "samples": 60,
+          "recall": 0.85
+        }
+      },
+      "metrics_by_condition": {
+        "aucune_plaque": {
+          "samples": 20,
+          "positive_samples": 0,
+          "negative_samples": 20,
+          "recall": null,
+          "precision": null,
+          "false_positive_rate": 0.0,
+          "l1_hit_rate": 0.1
+        },
+        "frontal": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.74,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.78
+        },
+        "main_sur_bord": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.37,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        },
+        "occlusion_angle": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.69,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        }
+      },
+      "confusion": {
+        "<negative>": {
+          "<none>": 20
+        },
+        "plate_bougie": {
+          "<none>": 39,
+          "plate_bougie": 21
+        },
+        "plate_cellule": {
+          "plate_cellule": 57,
+          "<none>": 3
+        },
+        "plate_chaudron": {
+          "plate_chaudron": 30,
+          "<none>": 30
+        },
+        "plate_dague": {
+          "<none>": 39,
+          "plate_dague": 21
+        },
+        "plate_vampire": {
+          "plate_vampire": 51,
+          "<none>": 9
+        }
+      }
+    },
+    {
+      "run_index": 1,
+      "order_index": 3,
+      "variant": "A",
+      "backend": "orb",
+      "homography_requested": "magsac",
+      "wall_time_s": 44.94199126699823,
+      "samples": 320,
+      "positive_samples": 300,
+      "negative_samples": 20,
+      "recall": 0.6233333333333333,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.37666666666666665,
+      "true_positives": 187,
+      "true_negatives": 20,
+      "false_positives": 0,
+      "false_negatives": 113,
+      "l1_hit_rate": 0.25,
+      "l2_success_rate": 0.61875,
+      "l3_success_rate": 0.584375,
+      "latency_ms_p50": 122.98342199937906,
+      "latency_ms_p95": 138.7149884023529,
+      "time_to_first_detection_p50": 0.0,
+      "time_to_first_detection_p95": 1.1499999999999995,
+      "longest_miss_streak": 19,
+      "fps_mean": 8.856047209689711,
+      "cpu_percent_mean": 315.50417302650555,
+      "ram_mb_peak": 3247.578125,
+      "recall_by_object": {
+        "plate_bougie": {
+          "samples": 60,
+          "recall": 0.48333333333333334
+        },
+        "plate_cellule": {
+          "samples": 60,
+          "recall": 0.75
+        },
+        "plate_chaudron": {
+          "samples": 60,
+          "recall": 0.75
+        },
+        "plate_dague": {
+          "samples": 60,
+          "recall": 0.5
+        },
+        "plate_vampire": {
+          "samples": 60,
+          "recall": 0.6333333333333333
+        }
+      },
+      "metrics_by_condition": {
+        "aucune_plaque": {
+          "samples": 20,
+          "positive_samples": 0,
+          "negative_samples": 20,
+          "recall": null,
+          "precision": null,
+          "false_positive_rate": 0.0,
+          "l1_hit_rate": 0.1
+        },
+        "frontal": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.73,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.78
+        },
+        "main_sur_bord": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.37,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        },
+        "occlusion_angle": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.77,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        }
+      },
+      "confusion": {
+        "<negative>": {
+          "<none>": 20
+        },
+        "plate_bougie": {
+          "<none>": 31,
+          "plate_bougie": 29
+        },
+        "plate_cellule": {
+          "<none>": 15,
+          "plate_cellule": 45
+        },
+        "plate_chaudron": {
+          "plate_chaudron": 45,
+          "<none>": 15
+        },
+        "plate_dague": {
+          "plate_dague": 30,
+          "<none>": 30
+        },
+        "plate_vampire": {
+          "plate_vampire": 38,
+          "<none>": 22
+        }
+      }
+    },
+    {
+      "run_index": 1,
+      "order_index": 4,
+      "variant": "A",
+      "backend": "orb",
+      "homography_requested": "ransac",
+      "wall_time_s": 65.27718411100795,
+      "samples": 320,
+      "positive_samples": 300,
+      "negative_samples": 20,
+      "recall": 0.6233333333333333,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.37666666666666665,
+      "true_positives": 187,
+      "true_negatives": 20,
+      "false_positives": 0,
+      "false_negatives": 113,
+      "l1_hit_rate": 0.25,
+      "l2_success_rate": 0.640625,
+      "l3_success_rate": 0.584375,
+      "latency_ms_p50": 155.81140050198883,
+      "latency_ms_p95": 412.63556800331577,
+      "time_to_first_detection_p50": 0.0,
+      "time_to_first_detection_p95": 1.6499999999999995,
+      "longest_miss_streak": 19,
+      "fps_mean": 6.749886326592771,
+      "cpu_percent_mean": 263.6626134129768,
+      "ram_mb_peak": 3247.578125,
+      "recall_by_object": {
+        "plate_bougie": {
+          "samples": 60,
+          "recall": 0.4666666666666667
+        },
+        "plate_cellule": {
+          "samples": 60,
+          "recall": 0.6666666666666666
+        },
+        "plate_chaudron": {
+          "samples": 60,
+          "recall": 0.7666666666666667
+        },
+        "plate_dague": {
+          "samples": 60,
+          "recall": 0.5333333333333333
+        },
+        "plate_vampire": {
+          "samples": 60,
+          "recall": 0.6833333333333333
+        }
+      },
+      "metrics_by_condition": {
+        "aucune_plaque": {
+          "samples": 20,
+          "positive_samples": 0,
+          "negative_samples": 20,
+          "recall": null,
+          "precision": null,
+          "false_positive_rate": 0.0,
+          "l1_hit_rate": 0.1
+        },
+        "frontal": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.76,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.78
+        },
+        "main_sur_bord": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.34,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        },
+        "occlusion_angle": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.77,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        }
+      },
+      "confusion": {
+        "<negative>": {
+          "<none>": 20
+        },
+        "plate_bougie": {
+          "<none>": 32,
+          "plate_bougie": 28
+        },
+        "plate_cellule": {
+          "<none>": 20,
+          "plate_cellule": 40
+        },
+        "plate_chaudron": {
+          "plate_chaudron": 46,
+          "<none>": 14
+        },
+        "plate_dague": {
+          "plate_dague": 32,
+          "<none>": 28
+        },
+        "plate_vampire": {
+          "plate_vampire": 41,
+          "<none>": 19
+        }
+      }
+    },
+    {
+      "run_index": 2,
+      "order_index": 1,
+      "variant": "A",
+      "backend": "orb",
+      "homography_requested": "ransac",
+      "wall_time_s": 65.3292629350035,
+      "samples": 320,
+      "positive_samples": 300,
+      "negative_samples": 20,
+      "recall": 0.6233333333333333,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.37666666666666665,
+      "true_positives": 187,
+      "true_negatives": 20,
+      "false_positives": 0,
+      "false_negatives": 113,
+      "l1_hit_rate": 0.25,
+      "l2_success_rate": 0.640625,
+      "l3_success_rate": 0.584375,
+      "latency_ms_p50": 155.72656749282032,
+      "latency_ms_p95": 417.09585574790265,
+      "time_to_first_detection_p50": 0.0,
+      "time_to_first_detection_p95": 1.6499999999999995,
+      "longest_miss_streak": 19,
+      "fps_mean": 6.748588174887821,
+      "cpu_percent_mean": 263.48947459109456,
+      "ram_mb_peak": 3247.578125,
+      "recall_by_object": {
+        "plate_bougie": {
+          "samples": 60,
+          "recall": 0.4666666666666667
+        },
+        "plate_cellule": {
+          "samples": 60,
+          "recall": 0.6666666666666666
+        },
+        "plate_chaudron": {
+          "samples": 60,
+          "recall": 0.7666666666666667
+        },
+        "plate_dague": {
+          "samples": 60,
+          "recall": 0.5333333333333333
+        },
+        "plate_vampire": {
+          "samples": 60,
+          "recall": 0.6833333333333333
+        }
+      },
+      "metrics_by_condition": {
+        "aucune_plaque": {
+          "samples": 20,
+          "positive_samples": 0,
+          "negative_samples": 20,
+          "recall": null,
+          "precision": null,
+          "false_positive_rate": 0.0,
+          "l1_hit_rate": 0.1
+        },
+        "frontal": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.76,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.78
+        },
+        "main_sur_bord": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.34,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        },
+        "occlusion_angle": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.77,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        }
+      },
+      "confusion": {
+        "<negative>": {
+          "<none>": 20
+        },
+        "plate_bougie": {
+          "<none>": 32,
+          "plate_bougie": 28
+        },
+        "plate_cellule": {
+          "<none>": 20,
+          "plate_cellule": 40
+        },
+        "plate_chaudron": {
+          "plate_chaudron": 46,
+          "<none>": 14
+        },
+        "plate_dague": {
+          "plate_dague": 32,
+          "<none>": 28
+        },
+        "plate_vampire": {
+          "plate_vampire": 41,
+          "<none>": 19
+        }
+      }
+    },
+    {
+      "run_index": 2,
+      "order_index": 2,
+      "variant": "A",
+      "backend": "orb",
+      "homography_requested": "magsac",
+      "wall_time_s": 45.006371887997375,
+      "samples": 320,
+      "positive_samples": 300,
+      "negative_samples": 20,
+      "recall": 0.6233333333333333,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.37666666666666665,
+      "true_positives": 187,
+      "true_negatives": 20,
+      "false_positives": 0,
+      "false_negatives": 113,
+      "l1_hit_rate": 0.25,
+      "l2_success_rate": 0.61875,
+      "l3_success_rate": 0.584375,
+      "latency_ms_p50": 123.14565249835141,
+      "latency_ms_p95": 138.55220415935037,
+      "time_to_first_detection_p50": 0.0,
+      "time_to_first_detection_p95": 1.1499999999999995,
+      "longest_miss_streak": 19,
+      "fps_mean": 8.83636791975141,
+      "cpu_percent_mean": 315.61486436730894,
+      "ram_mb_peak": 3247.578125,
+      "recall_by_object": {
+        "plate_bougie": {
+          "samples": 60,
+          "recall": 0.48333333333333334
+        },
+        "plate_cellule": {
+          "samples": 60,
+          "recall": 0.75
+        },
+        "plate_chaudron": {
+          "samples": 60,
+          "recall": 0.75
+        },
+        "plate_dague": {
+          "samples": 60,
+          "recall": 0.5
+        },
+        "plate_vampire": {
+          "samples": 60,
+          "recall": 0.6333333333333333
+        }
+      },
+      "metrics_by_condition": {
+        "aucune_plaque": {
+          "samples": 20,
+          "positive_samples": 0,
+          "negative_samples": 20,
+          "recall": null,
+          "precision": null,
+          "false_positive_rate": 0.0,
+          "l1_hit_rate": 0.1
+        },
+        "frontal": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.73,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.78
+        },
+        "main_sur_bord": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.37,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        },
+        "occlusion_angle": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.77,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        }
+      },
+      "confusion": {
+        "<negative>": {
+          "<none>": 20
+        },
+        "plate_bougie": {
+          "<none>": 31,
+          "plate_bougie": 29
+        },
+        "plate_cellule": {
+          "<none>": 15,
+          "plate_cellule": 45
+        },
+        "plate_chaudron": {
+          "plate_chaudron": 45,
+          "<none>": 15
+        },
+        "plate_dague": {
+          "plate_dague": 30,
+          "<none>": 30
+        },
+        "plate_vampire": {
+          "plate_vampire": 38,
+          "<none>": 22
+        }
+      }
+    },
+    {
+      "run_index": 2,
+      "order_index": 3,
+      "variant": "B",
+      "backend": "sift",
+      "homography_requested": "ransac",
+      "wall_time_s": 443.4735035999911,
+      "samples": 320,
+      "positive_samples": 300,
+      "negative_samples": 20,
+      "recall": 0.6,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.4,
+      "true_positives": 180,
+      "true_negatives": 20,
+      "false_positives": 0,
+      "false_negatives": 120,
+      "l1_hit_rate": 0.25,
+      "l2_success_rate": 0.609375,
+      "l3_success_rate": 0.5625,
+      "latency_ms_p50": 1281.3488535030046,
+      "latency_ms_p95": 1724.6334214010858,
+      "time_to_first_detection_p50": 0.0,
+      "time_to_first_detection_p95": 1.0,
+      "longest_miss_streak": 20,
+      "fps_mean": 0.8048369680825125,
+      "cpu_percent_mean": 172.9046439903473,
+      "ram_mb_peak": 3249.046875,
+      "recall_by_object": {
+        "plate_bougie": {
+          "samples": 60,
+          "recall": 0.35
+        },
+        "plate_cellule": {
+          "samples": 60,
+          "recall": 0.95
+        },
+        "plate_chaudron": {
+          "samples": 60,
+          "recall": 0.5
+        },
+        "plate_dague": {
+          "samples": 60,
+          "recall": 0.35
+        },
+        "plate_vampire": {
+          "samples": 60,
+          "recall": 0.85
+        }
+      },
+      "metrics_by_condition": {
+        "aucune_plaque": {
+          "samples": 20,
+          "positive_samples": 0,
+          "negative_samples": 20,
+          "recall": null,
+          "precision": null,
+          "false_positive_rate": 0.0,
+          "l1_hit_rate": 0.1
+        },
+        "frontal": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.74,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.78
+        },
+        "main_sur_bord": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.37,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        },
+        "occlusion_angle": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.69,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        }
+      },
+      "confusion": {
+        "<negative>": {
+          "<none>": 20
+        },
+        "plate_bougie": {
+          "<none>": 39,
+          "plate_bougie": 21
+        },
+        "plate_cellule": {
+          "plate_cellule": 57,
+          "<none>": 3
+        },
+        "plate_chaudron": {
+          "plate_chaudron": 30,
+          "<none>": 30
+        },
+        "plate_dague": {
+          "<none>": 39,
+          "plate_dague": 21
+        },
+        "plate_vampire": {
+          "plate_vampire": 51,
+          "<none>": 9
+        }
+      }
+    },
+    {
+      "run_index": 2,
+      "order_index": 4,
+      "variant": "B",
+      "backend": "sift",
+      "homography_requested": "magsac",
+      "wall_time_s": 174.91900540298957,
+      "samples": 320,
+      "positive_samples": 300,
+      "negative_samples": 20,
+      "recall": 0.6033333333333334,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.39666666666666667,
+      "true_positives": 181,
+      "true_negatives": 20,
+      "false_positives": 0,
+      "false_negatives": 119,
+      "l1_hit_rate": 0.25,
+      "l2_success_rate": 0.590625,
+      "l3_success_rate": 0.565625,
+      "latency_ms_p50": 477.7570495061809,
+      "latency_ms_p95": 507.76590723908157,
+      "time_to_first_detection_p50": 0.0,
+      "time_to_first_detection_p95": 1.3999999999999986,
+      "longest_miss_streak": 20,
+      "fps_mean": 2.2918904668442868,
+      "cpu_percent_mean": 300.08790090066066,
+      "ram_mb_peak": 3249.046875,
+      "recall_by_object": {
+        "plate_bougie": {
+          "samples": 60,
+          "recall": 0.36666666666666664
+        },
+        "plate_cellule": {
+          "samples": 60,
+          "recall": 0.95
+        },
+        "plate_chaudron": {
+          "samples": 60,
+          "recall": 0.5333333333333333
+        },
+        "plate_dague": {
+          "samples": 60,
+          "recall": 0.31666666666666665
+        },
+        "plate_vampire": {
+          "samples": 60,
+          "recall": 0.85
+        }
+      },
+      "metrics_by_condition": {
+        "aucune_plaque": {
+          "samples": 20,
+          "positive_samples": 0,
+          "negative_samples": 20,
+          "recall": null,
+          "precision": null,
+          "false_positive_rate": 0.0,
+          "l1_hit_rate": 0.1
+        },
+        "frontal": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.76,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.78
+        },
+        "main_sur_bord": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.38,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        },
+        "occlusion_angle": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.67,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        }
+      },
+      "confusion": {
+        "<negative>": {
+          "<none>": 20
+        },
+        "plate_bougie": {
+          "<none>": 38,
+          "plate_bougie": 22
+        },
+        "plate_cellule": {
+          "plate_cellule": 57,
+          "<none>": 3
+        },
+        "plate_chaudron": {
+          "plate_chaudron": 32,
+          "<none>": 28
+        },
+        "plate_dague": {
+          "<none>": 41,
+          "plate_dague": 19
+        },
+        "plate_vampire": {
+          "plate_vampire": 51,
+          "<none>": 9
+        }
+      }
+    },
+    {
+      "run_index": 3,
+      "order_index": 1,
+      "variant": "A",
+      "backend": "orb",
+      "homography_requested": "ransac",
+      "wall_time_s": 65.34091903700028,
+      "samples": 320,
+      "positive_samples": 300,
+      "negative_samples": 20,
+      "recall": 0.6233333333333333,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.37666666666666665,
+      "true_positives": 187,
+      "true_negatives": 20,
+      "false_positives": 0,
+      "false_negatives": 113,
+      "l1_hit_rate": 0.25,
+      "l2_success_rate": 0.640625,
+      "l3_success_rate": 0.584375,
+      "latency_ms_p50": 155.87532900099177,
+      "latency_ms_p95": 412.909624051099,
+      "time_to_first_detection_p50": 0.0,
+      "time_to_first_detection_p95": 1.6499999999999995,
+      "longest_miss_streak": 19,
+      "fps_mean": 6.74409618775626,
+      "cpu_percent_mean": 263.67151106217557,
+      "ram_mb_peak": 3249.046875,
+      "recall_by_object": {
+        "plate_bougie": {
+          "samples": 60,
+          "recall": 0.4666666666666667
+        },
+        "plate_cellule": {
+          "samples": 60,
+          "recall": 0.6666666666666666
+        },
+        "plate_chaudron": {
+          "samples": 60,
+          "recall": 0.7666666666666667
+        },
+        "plate_dague": {
+          "samples": 60,
+          "recall": 0.5333333333333333
+        },
+        "plate_vampire": {
+          "samples": 60,
+          "recall": 0.6833333333333333
+        }
+      },
+      "metrics_by_condition": {
+        "aucune_plaque": {
+          "samples": 20,
+          "positive_samples": 0,
+          "negative_samples": 20,
+          "recall": null,
+          "precision": null,
+          "false_positive_rate": 0.0,
+          "l1_hit_rate": 0.1
+        },
+        "frontal": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.76,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.78
+        },
+        "main_sur_bord": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.34,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        },
+        "occlusion_angle": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.77,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        }
+      },
+      "confusion": {
+        "<negative>": {
+          "<none>": 20
+        },
+        "plate_bougie": {
+          "<none>": 32,
+          "plate_bougie": 28
+        },
+        "plate_cellule": {
+          "<none>": 20,
+          "plate_cellule": 40
+        },
+        "plate_chaudron": {
+          "plate_chaudron": 46,
+          "<none>": 14
+        },
+        "plate_dague": {
+          "plate_dague": 32,
+          "<none>": 28
+        },
+        "plate_vampire": {
+          "plate_vampire": 41,
+          "<none>": 19
+        }
+      }
+    },
+    {
+      "run_index": 3,
+      "order_index": 2,
+      "variant": "B",
+      "backend": "sift",
+      "homography_requested": "ransac",
+      "wall_time_s": 443.3579695019871,
+      "samples": 320,
+      "positive_samples": 300,
+      "negative_samples": 20,
+      "recall": 0.6,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.4,
+      "true_positives": 180,
+      "true_negatives": 20,
+      "false_positives": 0,
+      "false_negatives": 120,
+      "l1_hit_rate": 0.25,
+      "l2_success_rate": 0.609375,
+      "l3_success_rate": 0.5625,
+      "latency_ms_p50": 1279.89500399417,
+      "latency_ms_p95": 1726.7864142464532,
+      "time_to_first_detection_p50": 0.0,
+      "time_to_first_detection_p95": 1.0,
+      "longest_miss_streak": 20,
+      "fps_mean": 0.8051788001536838,
+      "cpu_percent_mean": 173.01284741509897,
+      "ram_mb_peak": 3249.046875,
+      "recall_by_object": {
+        "plate_bougie": {
+          "samples": 60,
+          "recall": 0.35
+        },
+        "plate_cellule": {
+          "samples": 60,
+          "recall": 0.95
+        },
+        "plate_chaudron": {
+          "samples": 60,
+          "recall": 0.5
+        },
+        "plate_dague": {
+          "samples": 60,
+          "recall": 0.35
+        },
+        "plate_vampire": {
+          "samples": 60,
+          "recall": 0.85
+        }
+      },
+      "metrics_by_condition": {
+        "aucune_plaque": {
+          "samples": 20,
+          "positive_samples": 0,
+          "negative_samples": 20,
+          "recall": null,
+          "precision": null,
+          "false_positive_rate": 0.0,
+          "l1_hit_rate": 0.1
+        },
+        "frontal": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.74,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.78
+        },
+        "main_sur_bord": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.37,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        },
+        "occlusion_angle": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.69,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        }
+      },
+      "confusion": {
+        "<negative>": {
+          "<none>": 20
+        },
+        "plate_bougie": {
+          "<none>": 39,
+          "plate_bougie": 21
+        },
+        "plate_cellule": {
+          "plate_cellule": 57,
+          "<none>": 3
+        },
+        "plate_chaudron": {
+          "plate_chaudron": 30,
+          "<none>": 30
+        },
+        "plate_dague": {
+          "<none>": 39,
+          "plate_dague": 21
+        },
+        "plate_vampire": {
+          "plate_vampire": 51,
+          "<none>": 9
+        }
+      }
+    },
+    {
+      "run_index": 3,
+      "order_index": 3,
+      "variant": "A",
+      "backend": "orb",
+      "homography_requested": "magsac",
+      "wall_time_s": 44.967915817003814,
+      "samples": 320,
+      "positive_samples": 300,
+      "negative_samples": 20,
+      "recall": 0.6233333333333333,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.37666666666666665,
+      "true_positives": 187,
+      "true_negatives": 20,
+      "false_positives": 0,
+      "false_negatives": 113,
+      "l1_hit_rate": 0.25,
+      "l2_success_rate": 0.61875,
+      "l3_success_rate": 0.584375,
+      "latency_ms_p50": 122.895647000405,
+      "latency_ms_p95": 138.6685707977449,
+      "time_to_first_detection_p50": 0.0,
+      "time_to_first_detection_p95": 1.1499999999999995,
+      "longest_miss_streak": 19,
+      "fps_mean": 8.845348747174109,
+      "cpu_percent_mean": 315.5110660248164,
+      "ram_mb_peak": 3249.046875,
+      "recall_by_object": {
+        "plate_bougie": {
+          "samples": 60,
+          "recall": 0.48333333333333334
+        },
+        "plate_cellule": {
+          "samples": 60,
+          "recall": 0.75
+        },
+        "plate_chaudron": {
+          "samples": 60,
+          "recall": 0.75
+        },
+        "plate_dague": {
+          "samples": 60,
+          "recall": 0.5
+        },
+        "plate_vampire": {
+          "samples": 60,
+          "recall": 0.6333333333333333
+        }
+      },
+      "metrics_by_condition": {
+        "aucune_plaque": {
+          "samples": 20,
+          "positive_samples": 0,
+          "negative_samples": 20,
+          "recall": null,
+          "precision": null,
+          "false_positive_rate": 0.0,
+          "l1_hit_rate": 0.1
+        },
+        "frontal": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.73,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.78
+        },
+        "main_sur_bord": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.37,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        },
+        "occlusion_angle": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.77,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        }
+      },
+      "confusion": {
+        "<negative>": {
+          "<none>": 20
+        },
+        "plate_bougie": {
+          "<none>": 31,
+          "plate_bougie": 29
+        },
+        "plate_cellule": {
+          "<none>": 15,
+          "plate_cellule": 45
+        },
+        "plate_chaudron": {
+          "plate_chaudron": 45,
+          "<none>": 15
+        },
+        "plate_dague": {
+          "plate_dague": 30,
+          "<none>": 30
+        },
+        "plate_vampire": {
+          "plate_vampire": 38,
+          "<none>": 22
+        }
+      }
+    },
+    {
+      "run_index": 3,
+      "order_index": 4,
+      "variant": "B",
+      "backend": "sift",
+      "homography_requested": "magsac",
+      "wall_time_s": 174.85074283998983,
+      "samples": 320,
+      "positive_samples": 300,
+      "negative_samples": 20,
+      "recall": 0.6033333333333334,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.39666666666666667,
+      "true_positives": 181,
+      "true_negatives": 20,
+      "false_positives": 0,
+      "false_negatives": 119,
+      "l1_hit_rate": 0.25,
+      "l2_success_rate": 0.590625,
+      "l3_success_rate": 0.565625,
+      "latency_ms_p50": 477.75071900105104,
+      "latency_ms_p95": 507.6118411401694,
+      "time_to_first_detection_p50": 0.0,
+      "time_to_first_detection_p95": 1.3999999999999986,
+      "longest_miss_streak": 20,
+      "fps_mean": 2.29439272466871,
+      "cpu_percent_mean": 300.8708647918502,
+      "ram_mb_peak": 3249.046875,
+      "recall_by_object": {
+        "plate_bougie": {
+          "samples": 60,
+          "recall": 0.36666666666666664
+        },
+        "plate_cellule": {
+          "samples": 60,
+          "recall": 0.95
+        },
+        "plate_chaudron": {
+          "samples": 60,
+          "recall": 0.5333333333333333
+        },
+        "plate_dague": {
+          "samples": 60,
+          "recall": 0.31666666666666665
+        },
+        "plate_vampire": {
+          "samples": 60,
+          "recall": 0.85
+        }
+      },
+      "metrics_by_condition": {
+        "aucune_plaque": {
+          "samples": 20,
+          "positive_samples": 0,
+          "negative_samples": 20,
+          "recall": null,
+          "precision": null,
+          "false_positive_rate": 0.0,
+          "l1_hit_rate": 0.1
+        },
+        "frontal": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.76,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.78
+        },
+        "main_sur_bord": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.38,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        },
+        "occlusion_angle": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.67,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        }
+      },
+      "confusion": {
+        "<negative>": {
+          "<none>": 20
+        },
+        "plate_bougie": {
+          "<none>": 38,
+          "plate_bougie": 22
+        },
+        "plate_cellule": {
+          "plate_cellule": 57,
+          "<none>": 3
+        },
+        "plate_chaudron": {
+          "plate_chaudron": 32,
+          "<none>": 28
+        },
+        "plate_dague": {
+          "<none>": 41,
+          "plate_dague": 19
+        },
+        "plate_vampire": {
+          "plate_vampire": 51,
+          "<none>": 9
+        }
+      }
+    },
+    {
+      "run_index": 4,
+      "order_index": 1,
+      "variant": "B",
+      "backend": "sift",
+      "homography_requested": "magsac",
+      "wall_time_s": 174.63232696900377,
+      "samples": 320,
+      "positive_samples": 300,
+      "negative_samples": 20,
+      "recall": 0.6033333333333334,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.39666666666666667,
+      "true_positives": 181,
+      "true_negatives": 20,
+      "false_positives": 0,
+      "false_negatives": 119,
+      "l1_hit_rate": 0.25,
+      "l2_success_rate": 0.590625,
+      "l3_success_rate": 0.565625,
+      "latency_ms_p50": 476.9918064994272,
+      "latency_ms_p95": 507.6158801042766,
+      "time_to_first_detection_p50": 0.0,
+      "time_to_first_detection_p95": 1.3999999999999986,
+      "longest_miss_streak": 20,
+      "fps_mean": 2.297054208895138,
+      "cpu_percent_mean": 300.6515088646512,
+      "ram_mb_peak": 3249.046875,
+      "recall_by_object": {
+        "plate_bougie": {
+          "samples": 60,
+          "recall": 0.36666666666666664
+        },
+        "plate_cellule": {
+          "samples": 60,
+          "recall": 0.95
+        },
+        "plate_chaudron": {
+          "samples": 60,
+          "recall": 0.5333333333333333
+        },
+        "plate_dague": {
+          "samples": 60,
+          "recall": 0.31666666666666665
+        },
+        "plate_vampire": {
+          "samples": 60,
+          "recall": 0.85
+        }
+      },
+      "metrics_by_condition": {
+        "aucune_plaque": {
+          "samples": 20,
+          "positive_samples": 0,
+          "negative_samples": 20,
+          "recall": null,
+          "precision": null,
+          "false_positive_rate": 0.0,
+          "l1_hit_rate": 0.1
+        },
+        "frontal": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.76,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.78
+        },
+        "main_sur_bord": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.38,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        },
+        "occlusion_angle": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.67,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        }
+      },
+      "confusion": {
+        "<negative>": {
+          "<none>": 20
+        },
+        "plate_bougie": {
+          "<none>": 38,
+          "plate_bougie": 22
+        },
+        "plate_cellule": {
+          "plate_cellule": 57,
+          "<none>": 3
+        },
+        "plate_chaudron": {
+          "plate_chaudron": 32,
+          "<none>": 28
+        },
+        "plate_dague": {
+          "<none>": 41,
+          "plate_dague": 19
+        },
+        "plate_vampire": {
+          "plate_vampire": 51,
+          "<none>": 9
+        }
+      }
+    },
+    {
+      "run_index": 4,
+      "order_index": 2,
+      "variant": "A",
+      "backend": "orb",
+      "homography_requested": "ransac",
+      "wall_time_s": 65.38925108499825,
+      "samples": 320,
+      "positive_samples": 300,
+      "negative_samples": 20,
+      "recall": 0.6233333333333333,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.37666666666666665,
+      "true_positives": 187,
+      "true_negatives": 20,
+      "false_positives": 0,
+      "false_negatives": 113,
+      "l1_hit_rate": 0.25,
+      "l2_success_rate": 0.640625,
+      "l3_success_rate": 0.584375,
+      "latency_ms_p50": 156.27160100120818,
+      "latency_ms_p95": 412.89086915203376,
+      "time_to_first_detection_p50": 0.0,
+      "time_to_first_detection_p95": 1.6499999999999995,
+      "longest_miss_streak": 19,
+      "fps_mean": 6.740369450413148,
+      "cpu_percent_mean": 263.58714936684794,
+      "ram_mb_peak": 3249.046875,
+      "recall_by_object": {
+        "plate_bougie": {
+          "samples": 60,
+          "recall": 0.4666666666666667
+        },
+        "plate_cellule": {
+          "samples": 60,
+          "recall": 0.6666666666666666
+        },
+        "plate_chaudron": {
+          "samples": 60,
+          "recall": 0.7666666666666667
+        },
+        "plate_dague": {
+          "samples": 60,
+          "recall": 0.5333333333333333
+        },
+        "plate_vampire": {
+          "samples": 60,
+          "recall": 0.6833333333333333
+        }
+      },
+      "metrics_by_condition": {
+        "aucune_plaque": {
+          "samples": 20,
+          "positive_samples": 0,
+          "negative_samples": 20,
+          "recall": null,
+          "precision": null,
+          "false_positive_rate": 0.0,
+          "l1_hit_rate": 0.1
+        },
+        "frontal": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.76,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.78
+        },
+        "main_sur_bord": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.34,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        },
+        "occlusion_angle": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.77,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        }
+      },
+      "confusion": {
+        "<negative>": {
+          "<none>": 20
+        },
+        "plate_bougie": {
+          "<none>": 32,
+          "plate_bougie": 28
+        },
+        "plate_cellule": {
+          "<none>": 20,
+          "plate_cellule": 40
+        },
+        "plate_chaudron": {
+          "plate_chaudron": 46,
+          "<none>": 14
+        },
+        "plate_dague": {
+          "plate_dague": 32,
+          "<none>": 28
+        },
+        "plate_vampire": {
+          "plate_vampire": 41,
+          "<none>": 19
+        }
+      }
+    },
+    {
+      "run_index": 4,
+      "order_index": 3,
+      "variant": "A",
+      "backend": "orb",
+      "homography_requested": "magsac",
+      "wall_time_s": 44.98077566199936,
+      "samples": 320,
+      "positive_samples": 300,
+      "negative_samples": 20,
+      "recall": 0.6233333333333333,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.37666666666666665,
+      "true_positives": 187,
+      "true_negatives": 20,
+      "false_positives": 0,
+      "false_negatives": 113,
+      "l1_hit_rate": 0.25,
+      "l2_success_rate": 0.61875,
+      "l3_success_rate": 0.584375,
+      "latency_ms_p50": 123.13726350839715,
+      "latency_ms_p95": 138.71163285148214,
+      "time_to_first_detection_p50": 0.0,
+      "time_to_first_detection_p95": 1.1499999999999995,
+      "longest_miss_streak": 19,
+      "fps_mean": 8.838989753269676,
+      "cpu_percent_mean": 315.57984220705583,
+      "ram_mb_peak": 3249.046875,
+      "recall_by_object": {
+        "plate_bougie": {
+          "samples": 60,
+          "recall": 0.48333333333333334
+        },
+        "plate_cellule": {
+          "samples": 60,
+          "recall": 0.75
+        },
+        "plate_chaudron": {
+          "samples": 60,
+          "recall": 0.75
+        },
+        "plate_dague": {
+          "samples": 60,
+          "recall": 0.5
+        },
+        "plate_vampire": {
+          "samples": 60,
+          "recall": 0.6333333333333333
+        }
+      },
+      "metrics_by_condition": {
+        "aucune_plaque": {
+          "samples": 20,
+          "positive_samples": 0,
+          "negative_samples": 20,
+          "recall": null,
+          "precision": null,
+          "false_positive_rate": 0.0,
+          "l1_hit_rate": 0.1
+        },
+        "frontal": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.73,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.78
+        },
+        "main_sur_bord": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.37,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        },
+        "occlusion_angle": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.77,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        }
+      },
+      "confusion": {
+        "<negative>": {
+          "<none>": 20
+        },
+        "plate_bougie": {
+          "<none>": 31,
+          "plate_bougie": 29
+        },
+        "plate_cellule": {
+          "<none>": 15,
+          "plate_cellule": 45
+        },
+        "plate_chaudron": {
+          "plate_chaudron": 45,
+          "<none>": 15
+        },
+        "plate_dague": {
+          "plate_dague": 30,
+          "<none>": 30
+        },
+        "plate_vampire": {
+          "plate_vampire": 38,
+          "<none>": 22
+        }
+      }
+    },
+    {
+      "run_index": 4,
+      "order_index": 4,
+      "variant": "B",
+      "backend": "sift",
+      "homography_requested": "ransac",
+      "wall_time_s": 442.1998459759925,
+      "samples": 320,
+      "positive_samples": 300,
+      "negative_samples": 20,
+      "recall": 0.6,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.4,
+      "true_positives": 180,
+      "true_negatives": 20,
+      "false_positives": 0,
+      "false_negatives": 120,
+      "l1_hit_rate": 0.25,
+      "l2_success_rate": 0.609375,
+      "l3_success_rate": 0.5625,
+      "latency_ms_p50": 1275.800765499298,
+      "latency_ms_p95": 1722.1093855063373,
+      "time_to_first_detection_p50": 0.0,
+      "time_to_first_detection_p95": 1.0,
+      "longest_miss_streak": 20,
+      "fps_mean": 0.8074438150075206,
+      "cpu_percent_mean": 172.4869106960788,
+      "ram_mb_peak": 3324.3125,
+      "recall_by_object": {
+        "plate_bougie": {
+          "samples": 60,
+          "recall": 0.35
+        },
+        "plate_cellule": {
+          "samples": 60,
+          "recall": 0.95
+        },
+        "plate_chaudron": {
+          "samples": 60,
+          "recall": 0.5
+        },
+        "plate_dague": {
+          "samples": 60,
+          "recall": 0.35
+        },
+        "plate_vampire": {
+          "samples": 60,
+          "recall": 0.85
+        }
+      },
+      "metrics_by_condition": {
+        "aucune_plaque": {
+          "samples": 20,
+          "positive_samples": 0,
+          "negative_samples": 20,
+          "recall": null,
+          "precision": null,
+          "false_positive_rate": 0.0,
+          "l1_hit_rate": 0.1
+        },
+        "frontal": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.74,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.78
+        },
+        "main_sur_bord": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.37,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        },
+        "occlusion_angle": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.69,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        }
+      },
+      "confusion": {
+        "<negative>": {
+          "<none>": 20
+        },
+        "plate_bougie": {
+          "<none>": 39,
+          "plate_bougie": 21
+        },
+        "plate_cellule": {
+          "plate_cellule": 57,
+          "<none>": 3
+        },
+        "plate_chaudron": {
+          "plate_chaudron": 30,
+          "<none>": 30
+        },
+        "plate_dague": {
+          "<none>": 39,
+          "plate_dague": 21
+        },
+        "plate_vampire": {
+          "plate_vampire": 51,
+          "<none>": 9
+        }
+      }
+    },
+    {
+      "run_index": 5,
+      "order_index": 1,
+      "variant": "A",
+      "backend": "orb",
+      "homography_requested": "magsac",
+      "wall_time_s": 45.01707444699423,
+      "samples": 320,
+      "positive_samples": 300,
+      "negative_samples": 20,
+      "recall": 0.6233333333333333,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.37666666666666665,
+      "true_positives": 187,
+      "true_negatives": 20,
+      "false_positives": 0,
+      "false_negatives": 113,
+      "l1_hit_rate": 0.25,
+      "l2_success_rate": 0.61875,
+      "l3_success_rate": 0.584375,
+      "latency_ms_p50": 123.32947499817237,
+      "latency_ms_p95": 139.10131879383698,
+      "time_to_first_detection_p50": 0.0,
+      "time_to_first_detection_p95": 1.1499999999999995,
+      "longest_miss_streak": 19,
+      "fps_mean": 8.833732516753093,
+      "cpu_percent_mean": 315.6756001717921,
+      "ram_mb_peak": 3324.3125,
+      "recall_by_object": {
+        "plate_bougie": {
+          "samples": 60,
+          "recall": 0.48333333333333334
+        },
+        "plate_cellule": {
+          "samples": 60,
+          "recall": 0.75
+        },
+        "plate_chaudron": {
+          "samples": 60,
+          "recall": 0.75
+        },
+        "plate_dague": {
+          "samples": 60,
+          "recall": 0.5
+        },
+        "plate_vampire": {
+          "samples": 60,
+          "recall": 0.6333333333333333
+        }
+      },
+      "metrics_by_condition": {
+        "aucune_plaque": {
+          "samples": 20,
+          "positive_samples": 0,
+          "negative_samples": 20,
+          "recall": null,
+          "precision": null,
+          "false_positive_rate": 0.0,
+          "l1_hit_rate": 0.1
+        },
+        "frontal": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.73,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.78
+        },
+        "main_sur_bord": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.37,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        },
+        "occlusion_angle": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.77,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        }
+      },
+      "confusion": {
+        "<negative>": {
+          "<none>": 20
+        },
+        "plate_bougie": {
+          "<none>": 31,
+          "plate_bougie": 29
+        },
+        "plate_cellule": {
+          "<none>": 15,
+          "plate_cellule": 45
+        },
+        "plate_chaudron": {
+          "plate_chaudron": 45,
+          "<none>": 15
+        },
+        "plate_dague": {
+          "plate_dague": 30,
+          "<none>": 30
+        },
+        "plate_vampire": {
+          "plate_vampire": 38,
+          "<none>": 22
+        }
+      }
+    },
+    {
+      "run_index": 5,
+      "order_index": 2,
+      "variant": "B",
+      "backend": "sift",
+      "homography_requested": "magsac",
+      "wall_time_s": 175.0925626919925,
+      "samples": 320,
+      "positive_samples": 300,
+      "negative_samples": 20,
+      "recall": 0.6033333333333334,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.39666666666666667,
+      "true_positives": 181,
+      "true_negatives": 20,
+      "false_positives": 0,
+      "false_negatives": 119,
+      "l1_hit_rate": 0.25,
+      "l2_success_rate": 0.590625,
+      "l3_success_rate": 0.565625,
+      "latency_ms_p50": 477.7182584948605,
+      "latency_ms_p95": 508.4320165529789,
+      "time_to_first_detection_p50": 0.0,
+      "time_to_first_detection_p95": 1.3999999999999986,
+      "longest_miss_streak": 20,
+      "fps_mean": 2.2922129294421727,
+      "cpu_percent_mean": 300.4100079753815,
+      "ram_mb_peak": 3324.3125,
+      "recall_by_object": {
+        "plate_bougie": {
+          "samples": 60,
+          "recall": 0.36666666666666664
+        },
+        "plate_cellule": {
+          "samples": 60,
+          "recall": 0.95
+        },
+        "plate_chaudron": {
+          "samples": 60,
+          "recall": 0.5333333333333333
+        },
+        "plate_dague": {
+          "samples": 60,
+          "recall": 0.31666666666666665
+        },
+        "plate_vampire": {
+          "samples": 60,
+          "recall": 0.85
+        }
+      },
+      "metrics_by_condition": {
+        "aucune_plaque": {
+          "samples": 20,
+          "positive_samples": 0,
+          "negative_samples": 20,
+          "recall": null,
+          "precision": null,
+          "false_positive_rate": 0.0,
+          "l1_hit_rate": 0.1
+        },
+        "frontal": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.76,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.78
+        },
+        "main_sur_bord": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.38,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        },
+        "occlusion_angle": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.67,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        }
+      },
+      "confusion": {
+        "<negative>": {
+          "<none>": 20
+        },
+        "plate_bougie": {
+          "<none>": 38,
+          "plate_bougie": 22
+        },
+        "plate_cellule": {
+          "plate_cellule": 57,
+          "<none>": 3
+        },
+        "plate_chaudron": {
+          "plate_chaudron": 32,
+          "<none>": 28
+        },
+        "plate_dague": {
+          "<none>": 41,
+          "plate_dague": 19
+        },
+        "plate_vampire": {
+          "plate_vampire": 51,
+          "<none>": 9
+        }
+      }
+    },
+    {
+      "run_index": 5,
+      "order_index": 3,
+      "variant": "B",
+      "backend": "sift",
+      "homography_requested": "ransac",
+      "wall_time_s": 443.49659053000505,
+      "samples": 320,
+      "positive_samples": 300,
+      "negative_samples": 20,
+      "recall": 0.6,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.4,
+      "true_positives": 180,
+      "true_negatives": 20,
+      "false_positives": 0,
+      "false_negatives": 120,
+      "l1_hit_rate": 0.25,
+      "l2_success_rate": 0.609375,
+      "l3_success_rate": 0.5625,
+      "latency_ms_p50": 1281.4271180031938,
+      "latency_ms_p95": 1723.6016249524255,
+      "time_to_first_detection_p50": 0.0,
+      "time_to_first_detection_p95": 1.0,
+      "longest_miss_streak": 20,
+      "fps_mean": 0.805064974182273,
+      "cpu_percent_mean": 172.88036009810588,
+      "ram_mb_peak": 3324.3125,
+      "recall_by_object": {
+        "plate_bougie": {
+          "samples": 60,
+          "recall": 0.35
+        },
+        "plate_cellule": {
+          "samples": 60,
+          "recall": 0.95
+        },
+        "plate_chaudron": {
+          "samples": 60,
+          "recall": 0.5
+        },
+        "plate_dague": {
+          "samples": 60,
+          "recall": 0.35
+        },
+        "plate_vampire": {
+          "samples": 60,
+          "recall": 0.85
+        }
+      },
+      "metrics_by_condition": {
+        "aucune_plaque": {
+          "samples": 20,
+          "positive_samples": 0,
+          "negative_samples": 20,
+          "recall": null,
+          "precision": null,
+          "false_positive_rate": 0.0,
+          "l1_hit_rate": 0.1
+        },
+        "frontal": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.74,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.78
+        },
+        "main_sur_bord": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.37,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        },
+        "occlusion_angle": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.69,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        }
+      },
+      "confusion": {
+        "<negative>": {
+          "<none>": 20
+        },
+        "plate_bougie": {
+          "<none>": 39,
+          "plate_bougie": 21
+        },
+        "plate_cellule": {
+          "plate_cellule": 57,
+          "<none>": 3
+        },
+        "plate_chaudron": {
+          "plate_chaudron": 30,
+          "<none>": 30
+        },
+        "plate_dague": {
+          "<none>": 39,
+          "plate_dague": 21
+        },
+        "plate_vampire": {
+          "plate_vampire": 51,
+          "<none>": 9
+        }
+      }
+    },
+    {
+      "run_index": 5,
+      "order_index": 4,
+      "variant": "A",
+      "backend": "orb",
+      "homography_requested": "ransac",
+      "wall_time_s": 65.32519536699692,
+      "samples": 320,
+      "positive_samples": 300,
+      "negative_samples": 20,
+      "recall": 0.6233333333333333,
+      "precision": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.37666666666666665,
+      "true_positives": 187,
+      "true_negatives": 20,
+      "false_positives": 0,
+      "false_negatives": 113,
+      "l1_hit_rate": 0.25,
+      "l2_success_rate": 0.640625,
+      "l3_success_rate": 0.584375,
+      "latency_ms_p50": 155.79523999622324,
+      "latency_ms_p95": 413.2304993079743,
+      "time_to_first_detection_p50": 0.0,
+      "time_to_first_detection_p95": 1.6499999999999995,
+      "longest_miss_streak": 19,
+      "fps_mean": 6.743233727993872,
+      "cpu_percent_mean": 263.7305359040594,
+      "ram_mb_peak": 3324.3125,
+      "recall_by_object": {
+        "plate_bougie": {
+          "samples": 60,
+          "recall": 0.4666666666666667
+        },
+        "plate_cellule": {
+          "samples": 60,
+          "recall": 0.6666666666666666
+        },
+        "plate_chaudron": {
+          "samples": 60,
+          "recall": 0.7666666666666667
+        },
+        "plate_dague": {
+          "samples": 60,
+          "recall": 0.5333333333333333
+        },
+        "plate_vampire": {
+          "samples": 60,
+          "recall": 0.6833333333333333
+        }
+      },
+      "metrics_by_condition": {
+        "aucune_plaque": {
+          "samples": 20,
+          "positive_samples": 0,
+          "negative_samples": 20,
+          "recall": null,
+          "precision": null,
+          "false_positive_rate": 0.0,
+          "l1_hit_rate": 0.1
+        },
+        "frontal": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.76,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.78
+        },
+        "main_sur_bord": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.34,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        },
+        "occlusion_angle": {
+          "samples": 100,
+          "positive_samples": 100,
+          "negative_samples": 0,
+          "recall": 0.77,
+          "precision": 1.0,
+          "false_positive_rate": null,
+          "l1_hit_rate": 0.0
+        }
+      },
+      "confusion": {
+        "<negative>": {
+          "<none>": 20
+        },
+        "plate_bougie": {
+          "<none>": 32,
+          "plate_bougie": 28
+        },
+        "plate_cellule": {
+          "<none>": 20,
+          "plate_cellule": 40
+        },
+        "plate_chaudron": {
+          "plate_chaudron": 46,
+          "<none>": 14
+        },
+        "plate_dague": {
+          "plate_dague": 32,
+          "<none>": 28
+        },
+        "plate_vampire": {
+          "plate_vampire": 41,
+          "<none>": 19
+        }
+      }
+    }
+  ]
+}

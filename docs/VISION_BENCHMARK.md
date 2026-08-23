@@ -229,6 +229,16 @@ calibrée atteint 66,67 % et le tracking expérimental 60,00 %. Aucun faux
 trigger n'est observé, mais l'unique séquence négative est insuffisante pour
 conclure. Ces mesures ne déclenchent aucun changement production.
 
+### Campagne répétée A/B × RANSAC/MAGSAC
+
+La campagne de cinq passes est publiée dans
+[`benchmark/reports/2026-08-23-styx-repeated/`](../benchmark/reports/2026-08-23-styx-repeated/).
+Le recall est strictement stable entre les cinq runs : A atteint 62,33 % avec
+les deux estimateurs, B 60,33 % avec MAGSAC et 60,00 % avec RANSAC. MAGSAC
+réduit la latence p50 moyenne de 155,90 à 123,10 ms sur A et de 1 279,20 à
+477,65 ms sur B. Aucun throttling n'a été observé. La production reste sur son
+estimateur par défaut actuel jusqu'à validation sur un corpus de référence.
+
 ## Protocole terrain recommandé
 
 1. Figer commit, versions et configuration caméra de STYX.
