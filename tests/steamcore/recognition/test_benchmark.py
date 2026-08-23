@@ -24,12 +24,21 @@ from steamcore.recognition.benchmark.runner import (
 from steamcore.recognition.benchmark.variants import get_variants
 
 
-def _metric(expected="plate_x", detected="plate_x"):
+def _metric(
+    expected="plate_x",
+    detected="plate_x",
+    *,
+    sequence_id="sequence_1",
+    frame_index=0,
+    timestamp_s=0.0,
+    condition="frontal",
+):
     flags = classify(expected, detected)
     return VisionMetric(
         sample_id="plate_x/frontal/a.png",
-        frame_index=0,
-        timestamp_s=0.0,
+        sequence_id=sequence_id,
+        frame_index=frame_index,
+        timestamp_s=timestamp_s,
         backend="orb",
         variant="A",
         homography_backend="ransac",
@@ -37,7 +46,7 @@ def _metric(expected="plate_x", detected="plate_x"):
         homography_fallback_used=False,
         object_expected=expected,
         object_detected=detected,
-        condition="frontal",
+        condition=condition,
         l1_hit=True,
         l1_miss=False,
         l2_success=True,
@@ -81,6 +90,7 @@ def test_metrics_and_report_generation(tmp_path):
     assert summary["recall"] == 1.0
     assert summary["precision"] == 0.5
     assert summary["false_positive_rate"] == 1.0
+    assert summary["metrics_by_condition"]["frontal"]["l1_hit_rate"] == 1.0
     report = build_report(
         metrics,
         ReportContext("corpus", "PLATEST", "l1", 2, 0.1, 0),
@@ -92,6 +102,18 @@ def test_metrics_and_report_generation(tmp_path):
     assert json.loads(paths["json"].read_text(encoding="utf-8"))["samples"]
     assert paths["csv"].read_text(encoding="utf-8").startswith("sample_id")
     assert paths["markdown"].exists()
+
+
+def test_sequence_metrics_group_captured_images_by_sequence_id():
+    metrics = VisionMetricsAccumulator()
+    metrics.add(_metric(detected=None, frame_index=0, timestamp_s=0.0))
+    metrics.add(_metric(detected=None, frame_index=1, timestamp_s=0.5))
+    metrics.add(_metric(frame_index=2, timestamp_s=1.0))
+
+    summary = metrics.summary()
+
+    assert summary["time_to_first_detection_p50"] == 1.0
+    assert summary["longest_miss_streak"] == 2
 
 
 def test_variants_a_to_e():

@@ -12,6 +12,7 @@ import numpy as np
 @dataclass
 class VisionMetric:
     sample_id: str
+    sequence_id: str
     frame_index: int
     timestamp_s: float
     backend: str
@@ -112,6 +113,35 @@ def summarize_metrics(rows: list[VisionMetric]) -> dict:
             "recall": _ratio(correct, len(object_rows)),
         }
 
+    by_condition = {}
+    for condition in sorted({row.condition for row in rows}):
+        condition_rows = [row for row in rows if row.condition == condition]
+        condition_positives = sum(
+            row.object_expected is not None for row in condition_rows
+        )
+        condition_negatives = len(condition_rows) - condition_positives
+        condition_tp = sum(row.true_positive for row in condition_rows)
+        condition_detections = sum(
+            row.object_detected is not None for row in condition_rows
+        )
+        by_condition[condition] = {
+            "samples": len(condition_rows),
+            "positive_samples": condition_positives,
+            "negative_samples": condition_negatives,
+            "recall": _ratio(condition_tp, condition_positives),
+            "precision": _ratio(condition_tp, condition_detections),
+            "false_positive_rate": _ratio(
+                sum(
+                    row.object_expected is None and row.object_detected is not None
+                    for row in condition_rows
+                ),
+                condition_negatives,
+            ),
+            "l1_hit_rate": _ratio(
+                sum(row.l1_hit for row in condition_rows), len(condition_rows)
+            ),
+        }
+
     confusion = defaultdict(lambda: defaultdict(int))
     for row in rows:
         expected = row.object_expected or "<negative>"
@@ -153,6 +183,7 @@ def summarize_metrics(rows: list[VisionMetric]) -> dict:
         "cpu_percent_mean": float(np.mean(cpu_values)) if cpu_values else None,
         "ram_mb_peak": max(ram_values) if ram_values else None,
         "recall_by_object": by_object,
+        "metrics_by_condition": by_condition,
         "confusion": {key: dict(value) for key, value in confusion.items()},
     }
 
@@ -173,7 +204,15 @@ def classify(expected: str | None, detected: str | None) -> dict[str, bool]:
 def _sequence_metrics(rows: list[VisionMetric]) -> tuple[list[float], int]:
     grouped = defaultdict(list)
     for row in rows:
-        grouped[(row.variant, row.homography_requested, row.sample_id)].append(row)
+        grouped[
+            (
+                row.variant,
+                row.homography_requested,
+                row.object_expected,
+                row.condition,
+                row.sequence_id,
+            )
+        ].append(row)
     detection_times = []
     longest = 0
     for sequence_rows in grouped.values():

@@ -71,26 +71,38 @@ class VisionBenchmarkRunner:
         recognizer = self._create_l3(variant)
         fast_detector = FastDetector(min_area=self.options.fast_min_area)
         processed = 0
+        sequence_positions: dict[tuple[str | None, str, str], int] = {}
+        sequence_states: dict[tuple[str | None, str, str], dict] = {}
         for entry in self.entries:
-            miss_streak = 0
-            longest_miss_streak = 0
-            first_detection_seen = False
             for frame in iter_frames(entry):
                 if self.options.limit is not None and processed >= self.options.limit:
                     return
+                sequence_id = entry.metadata.sequence_id or entry.relative_path
+                sequence_key = (
+                    entry.metadata.expected,
+                    entry.metadata.condition,
+                    sequence_id,
+                )
+                frame = self._place_in_sequence(frame, sequence_key, sequence_positions)
                 metric = self._process_frame(
                     frame, variant, homography, fast_detector, detector, recognizer
                 )
+                state = sequence_states.setdefault(
+                    sequence_key,
+                    {"miss_streak": 0, "longest_miss_streak": 0, "detected": False},
+                )
                 if metric.object_expected is not None and not metric.true_positive:
-                    miss_streak += 1
-                    longest_miss_streak = max(longest_miss_streak, miss_streak)
+                    state["miss_streak"] += 1
+                    state["longest_miss_streak"] = max(
+                        state["longest_miss_streak"], state["miss_streak"]
+                    )
                 else:
-                    miss_streak = 0
-                metric.miss_streak = miss_streak
-                metric.longest_miss_streak = longest_miss_streak
-                if metric.true_positive and not first_detection_seen:
+                    state["miss_streak"] = 0
+                metric.miss_streak = state["miss_streak"]
+                metric.longest_miss_streak = state["longest_miss_streak"]
+                if metric.true_positive and not state["detected"]:
                     metric.time_to_first_detection = frame.timestamp_s
-                    first_detection_seen = True
+                    state["detected"] = True
                 self.metrics.add(metric)
                 processed += 1
                 if self.options.verbose:
@@ -100,6 +112,18 @@ class VisionBenchmarkRunner:
                     )
                 if metric.false_positive or metric.false_negative:
                     self._save_failure(frame, metric)
+
+    @staticmethod
+    def _place_in_sequence(
+        frame: CorpusFrame,
+        sequence_key: tuple[str | None, str, str],
+        sequence_positions: dict[tuple[str | None, str, str], int],
+    ) -> CorpusFrame:
+        index = sequence_positions.get(sequence_key, 0)
+        sequence_positions[sequence_key] = index + 1
+        fps = frame.entry.metadata.fps
+        timestamp = index / fps if fps and fps > 0 else frame.timestamp_s
+        return CorpusFrame(frame.entry, frame.image, index, timestamp)
 
     def _create_l3(self, variant: BenchmarkVariant):
         if variant.l3_backend == "orb":
@@ -162,6 +186,7 @@ class VisionBenchmarkRunner:
         cpu_elapsed = time.process_time() - cpu_started
         return VisionMetric(
             sample_id=frame.entry.relative_path,
+            sequence_id=frame.entry.metadata.sequence_id or frame.entry.relative_path,
             frame_index=frame.frame_index,
             timestamp_s=frame.timestamp_s,
             backend=variant.l2_backend,
@@ -223,6 +248,7 @@ class VisionBenchmarkRunner:
         flags = classify(frame.entry.metadata.expected, None)
         return VisionMetric(
             sample_id=frame.entry.relative_path,
+            sequence_id=frame.entry.metadata.sequence_id or frame.entry.relative_path,
             frame_index=frame.frame_index,
             timestamp_s=frame.timestamp_s,
             backend=variant.l2_backend,

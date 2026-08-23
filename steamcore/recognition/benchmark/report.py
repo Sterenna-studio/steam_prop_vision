@@ -156,6 +156,32 @@ def render_markdown(report: dict) -> str:
     else:
         lines.append("N/A — corpus terrain STYX requis.")
 
+    lines.extend(["", "## Métriques par condition", ""])
+    condition_rows = _condition_rows(variants)
+    if condition_rows:
+        lines.extend(
+            [
+                "| Variante | Homographie | Condition | N | Recall | Precision | L1 hit | FPR |",
+                "|---|---|---|---:|---:|---:|---:|---:|",
+            ]
+        )
+        for row in condition_rows:
+            lines.append(
+                "| {variant} | {homography} | {condition} | {samples} | "
+                "{recall} | {precision} | {l1} | {fpr} |".format(
+                    variant=row[0],
+                    homography=row[1],
+                    condition=row[2],
+                    samples=row[3],
+                    recall=_fmt_percent(row[4]),
+                    precision=_fmt_percent(row[5]),
+                    l1=_fmt_percent(row[6]),
+                    fpr=_fmt_percent(row[7]),
+                )
+            )
+    else:
+        lines.append("N/A — corpus terrain STYX requis.")
+
     lines.extend(["", "## Matrice de confusion", ""])
     if variants:
         for variant in variants:
@@ -256,6 +282,25 @@ def _object_rows(variants: list[dict]) -> list[tuple]:
                     object_id,
                     values["samples"],
                     values["recall"],
+                )
+            )
+    return rows
+
+
+def _condition_rows(variants: list[dict]) -> list[tuple]:
+    rows = []
+    for variant in variants:
+        for condition, values in variant["metrics_by_condition"].items():
+            rows.append(
+                (
+                    variant["variant"],
+                    variant["homography_requested"],
+                    condition,
+                    values["samples"],
+                    values["recall"],
+                    values["precision"],
+                    values["l1_hit_rate"],
+                    values["false_positive_rate"],
                 )
             )
     return rows
