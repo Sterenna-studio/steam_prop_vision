@@ -1,5 +1,10 @@
 # Pilote terrain STYX — 23 août 2026
 
+> **SUPERSEDED POUR LA DÉCISION :** ce pilote a rejoué à 90° des images déjà
+> orientées par le flux runtime. Les artefacts restent publiés pour audit, mais
+> leurs chiffres ne doivent pas guider un choix de production. Le replay corrigé
+> utilise `--camera-rotation 0` et sera publié séparément.
+
 Ces rapports ont été produits sur un Raspberry Pi 5 STYX équipé d'une caméra
 IMX708 et d'OpenCV 4.11.0, au commit benchmark `536cd21`. Ils sont publiés pour
 rendre les comparaisons auditables ; ils ne constituent pas encore le corpus

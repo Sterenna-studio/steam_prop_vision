@@ -2,6 +2,11 @@
 
 **STATUS: pilote terrain STYX capturé ; corpus de référence encore incomplet.**
 
+> Avertissement protocole : les rapports pilote publiés le 23 août 2026 ont
+> rejoué avec une rotation de 90° des images déjà orientées par `/stream`.
+> Ils sont conservés pour audit, mais leurs chiffres sont exploratoires et
+> doivent être remplacés par un replay corrigé à `--camera-rotation 0`.
+
 Ce document décrit l'outil reproductible livré pour l'issue #9. Il ne contient
 aucun chiffre de performance inventé. Les mesures du 23 août 2026 ci-dessous
 proviennent d'un pilote réel sur STYX, mais ne constituent pas encore le corpus
@@ -106,7 +111,8 @@ marge, correction éventuelle de top-1, score, seuil utilisé, confusion,
 time-to-first-detection et longest miss streak. FPS et CPU sont mesurés par le
 runner ; RAM reste N/A lorsque la plateforme ne permet pas une mesure fiable
 sans dépendance additionnelle. `time_to_trigger` reste N/A tant que le hold
-runtime n'est pas explicitement simulé.
+runtime n'est pas explicitement simulé. Le benchmark dédié
+[`VISION_L1_V2.md`](VISION_L1_V2.md) effectue cette simulation.
 
 ## Critère produit
 
@@ -132,7 +138,7 @@ variante avec un recall élevé mais des déclenchements sur hard negatives doit
 | Non mesurés | bois, ready-check, mouvements et conditions étendues |
 | Choix production | pipeline actuel inchangé |
 
-### Pilote occlusion du 23 août 2026
+### Pilote occlusion du 23 août 2026 — exploratoire, orientation à corriger
 
 Le corpus local non versionné contient 300 frames positives et 20 frames
 `aucune_plaque`. Pour chaque plaque disponible : 20 frames frontales, 20 avec
