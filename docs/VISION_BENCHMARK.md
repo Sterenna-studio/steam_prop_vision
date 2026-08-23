@@ -192,6 +192,16 @@ Les rapports bruts expurgés d'images sont publiés dans
 Le corpus reste privé sur STYX sous `.runtime/benchmark-corpus` et n'est
 volontairement ni copié dans `PLATEST`, ni versionné dans le dépôt public.
 
+### Replay L1 v2 corrigé
+
+Le replay corrigé à rotation 0 est publié dans
+[`benchmark/reports/2026-08-23-styx-l1-v2/`](../benchmark/reports/2026-08-23-styx-l1-v2/).
+Sur les 15 présentations positives du pilote, le contour actuel produit 33,33 %
+de triggers corrects, contre 86,67 % pour le full-frame fallback. La ROI
+calibrée atteint 66,67 % et le tracking expérimental 60,00 %. Aucun faux
+trigger n'est observé, mais l'unique séquence négative est insuffisante pour
+conclure. Ces mesures ne déclenchent aucun changement production.
+
 ## Protocole terrain recommandé
 
 1. Figer commit, versions et configuration caméra de STYX.
