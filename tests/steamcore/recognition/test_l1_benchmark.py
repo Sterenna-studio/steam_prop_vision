@@ -26,7 +26,15 @@ from steamcore.recognition.benchmark.l1_report import (
     render_l1_markdown,
     write_l1_reports,
 )
+from steamcore.recognition.benchmark.l1_runner import (
+    L1BenchmarkOptions,
+    L1BenchmarkRunner,
+)
+from steamcore.recognition.benchmark.variants import get_variants
+from steamcore.recognition.card_detector import CardCandidate
+from steamcore.recognition.card_recognizer import RecognitionCandidate
 from steamcore.recognition.fast_detector import QuadROI
+from steamcore.recognition.thresholds import RecognitionThresholds
 
 
 def _quad(x=20, y=20, size=60, confidence=0.9):
@@ -202,3 +210,109 @@ def test_l1_metrics_and_report_generation(tmp_path):
     paths = write_l1_reports(report, tmp_path, "l1")
     assert json.loads(paths["json"].read_text(encoding="utf-8"))["samples"]
     assert paths["csv"].exists()
+
+
+def test_l1_runner_replays_sequences_through_hold(monkeypatch, tmp_path):
+    corpus = tmp_path / "corpus"
+    positive = corpus / "plate_x" / "occlusion"
+    negative = corpus / "negatives" / "aucune_plaque"
+    positive.mkdir(parents=True)
+    negative.mkdir(parents=True)
+    for directory, value, expected, sequence_id in (
+        (positive, 255, "plate_x", "positive_sequence"),
+        (negative, 0, "none", "negative_sequence"),
+    ):
+        for index in range(4):
+            image_path = directory / f"frame_{index:04d}.png"
+            cv2.imwrite(str(image_path), np.full((40, 60, 3), value, dtype=np.uint8))
+            image_path.with_suffix(".yaml").write_text(
+                f"expected: {expected}\nsequence_id: {sequence_id}\nfps: 2\n",
+                encoding="utf-8",
+            )
+
+    class FakeFastDetector:
+        def __init__(self, **_kwargs):
+            pass
+
+        def detect(self, _frame):
+            return None
+
+    class FakeCardDetector:
+        def __init__(self, **_kwargs):
+            pass
+
+        def detect_candidates(self, roi, top_k=1):
+            if float(np.mean(roi)) < 1:
+                return []
+            return [
+                CardCandidate(
+                    card_id="plate_x",
+                    match_count=20,
+                    inlier_count=18,
+                    inlier_ratio=0.9,
+                    homography_quality=0.8,
+                    reprojection_error=0.2,
+                    corners=np.float32([[0, 0], [59, 0], [59, 39], [0, 39]]),
+                    warped=roi,
+                    score=0.75,
+                    quadrilateral_area=2301.0,
+                    geometry_valid=True,
+                    homography_backend="ransac",
+                    homography_fallback_used=False,
+                    homography_latency_ms=1.0,
+                )
+            ][:top_k]
+
+    class FakeRecognizer:
+        def __init__(self, **_kwargs):
+            pass
+
+        def recognize_candidates(self, _warped, hint_ids=None):
+            return [
+                RecognitionCandidate(
+                    card_id=hint_ids[0],
+                    score=0.8,
+                    matches=15,
+                    matched_img="template.png",
+                    threshold_used=0.2,
+                    accepted=True,
+                )
+            ]
+
+    monkeypatch.setattr(
+        "steamcore.recognition.benchmark.l1_runner.FastDetector", FakeFastDetector
+    )
+    monkeypatch.setattr(
+        "steamcore.recognition.benchmark.l1_runner.CardDetector", FakeCardDetector
+    )
+    monkeypatch.setattr(
+        "steamcore.recognition.benchmark.l1_runner.CardRecognizer", FakeRecognizer
+    )
+    runner = L1BenchmarkRunner(
+        get_variants("A")[0],
+        "ransac",
+        L1BenchmarkOptions(
+            corpus=str(corpus),
+            templates=str(tmp_path / "PLATEST"),
+            strategies=("contour", "full_fallback"),
+            hold_ms=1000,
+            consecutive_frames=1,
+            miss_grace_frames=0,
+        ),
+        RecognitionThresholds(default_threshold=0.2),
+    )
+
+    summaries = {row["strategy"]: row for row in runner.run().grouped_summary()}
+
+    assert summaries["contour"]["trigger_success_rate"] == 0.0
+    assert summaries["full_fallback"]["presentation_detection_rate"] == 1.0
+    assert summaries["full_fallback"]["trigger_success_rate"] == 1.0
+    assert summaries["full_fallback"]["negative_trigger_rate"] == 0.0
+    trigger_rows = [
+        row
+        for row in runner.metrics.rows
+        if row.strategy == "full_fallback" and row.trigger_id == "plate_x"
+    ]
+    assert len(trigger_rows) == 1
+    assert trigger_rows[0].frame_index == 3
+    assert trigger_rows[0].time_to_trigger == 1.5
