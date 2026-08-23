@@ -82,6 +82,33 @@ Le corpus est rejoué tel qu'il est stocké (`--camera-rotation 0` par défaut).
 Le flux MJPEG STYX est déjà orienté par le runtime ; lui réappliquer la valeur
 de `features.yaml` constituerait une double rotation.
 
+## Campagnes répétées
+
+Une comparaison de latence ne doit pas reposer sur une seule exécution. Le
+runner répété effectue un warm-up de chaque configuration, rejoue le corpus
+plusieurs fois et mélange leur ordre avec une seed enregistrée :
+
+```bash
+python tools/vision_benchmark_repeated.py \
+  --corpus .runtime/benchmark-corpus \
+  --variant A,B \
+  --homography all \
+  --roi-mode hybrid \
+  --runs 5 \
+  --warmup-frames 10 \
+  --seed 9 \
+  --camera-rotation 0 \
+  --report \
+  --output .runtime/benchmark-repeated
+```
+
+Le JSON conserve l'ordre exact de chaque passe et les résumés complets. Le CSV
+contient une ligne par configuration/passe. Le Markdown donne moyenne,
+écart-type et plage inter-runs pour le recall, la precision, le FPR, les
+latences, le CPU, les FPS et le temps mural. Ces agrégats réduisent les biais
+de cache, température et ordre ; ils ne remplacent pas plusieurs sessions
+terrain indépendantes.
+
 ## Corpus et ground truth
 
 Le format officiel est décrit dans
