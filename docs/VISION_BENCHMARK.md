@@ -63,6 +63,7 @@ Options essentielles :
 - `--variant A`, liste `A,B,D` ou `all` ;
 - `--homography ransac`, `magsac`, liste ou `all` ;
 - `--roi-mode l1|full|hybrid` (`l1` représente la barrière actuelle) ;
+- `--camera-rotation 0|90|180|270` uniquement pour des frames capteur brutes ;
 - `--object ID` conserve aussi les négatifs, indispensables à la precision ;
 - `--top-k 1|2` et `--top2-margin` ;
 - `--limit`, `--verbose`, `--save-failures` ;
@@ -71,6 +72,10 @@ Options essentielles :
 
 Le lancement sans corpus est valide pour tester l'installation. Il produit un
 rapport vide indiquant explicitement `N/A — corpus terrain requis`.
+
+Le corpus est rejoué tel qu'il est stocké (`--camera-rotation 0` par défaut).
+Le flux MJPEG STYX est déjà orienté par le runtime ; lui réappliquer la valeur
+de `features.yaml` constituerait une double rotation.
 
 ## Corpus et ground truth
 

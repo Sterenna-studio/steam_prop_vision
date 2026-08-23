@@ -30,6 +30,7 @@ class CaptureOptions:
     severity: str | None = None
     notes: str = ""
     timeout_s: float = 10.0
+    source_orientation: str = "runtime-corrected"
 
 
 @dataclass(frozen=True)
@@ -77,6 +78,7 @@ def capture_mjpeg_session(options: CaptureOptions) -> CaptureResult:
                 "sequence_id": sequence_id,
                 "fps": options.fps,
                 "source": options.stream_url,
+                "camera": {"orientation": options.source_orientation},
             }
             (directory / f"{stem}.yaml").write_text(
                 yaml.safe_dump(metadata, allow_unicode=True, sort_keys=False),
@@ -132,3 +134,5 @@ def _validate_options(options: CaptureOptions) -> None:
         raise ValueError("Le nombre d'images par seconde doit être positif")
     if options.countdown_s < 0:
         raise ValueError("Le compte à rebours ne peut pas être négatif")
+    if options.source_orientation not in {"raw", "runtime-corrected"}:
+        raise ValueError("Orientation source invalide")

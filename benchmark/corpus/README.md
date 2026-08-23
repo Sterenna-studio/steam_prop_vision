@@ -95,3 +95,9 @@ Le compte à rebours par défaut est de trois secondes. Chaque image reçoit un
 sidecar YAML avec son ground truth et son identifiant de séquence. Vérifier les
 prises avant de retenir ou d'exporter le corpus ; ne pas sélectionner seulement
 les détections réussies.
+
+Le flux `/stream` est produit après application de `camera_rotation` par le
+runtime. L'outil l'annote donc `camera.orientation: runtime-corrected`. Le
+benchmark rejoue par défaut les fichiers tels qu'ils sont stockés, sans relire
+la rotation de `features.yaml`. Utiliser `--camera-rotation` uniquement pour un
+corpus réellement capturé dans l'orientation brute du capteur.

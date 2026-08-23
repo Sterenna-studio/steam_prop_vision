@@ -43,3 +43,17 @@ def test_capture_options_reject_unsafe_condition(condition, tmp_path):
                 condition=condition,
             )
         )
+
+
+def test_capture_options_reject_unknown_source_orientation(tmp_path):
+    from steamcore.recognition.benchmark.capture import _validate_options
+
+    with pytest.raises(ValueError, match="Orientation source invalide"):
+        _validate_options(
+            CaptureOptions(
+                corpus=tmp_path,
+                object_id="plate_cellule",
+                condition="frontal",
+                source_orientation="unknown",
+            )
+        )

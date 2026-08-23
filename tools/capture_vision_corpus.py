@@ -35,6 +35,12 @@ def parse_args() -> argparse.Namespace:
         "--stream", default="http://127.0.0.1:5050/stream", dest="stream_url"
     )
     parser.add_argument("--corpus", default=".runtime/benchmark-corpus")
+    parser.add_argument(
+        "--source-orientation",
+        choices=("runtime-corrected", "raw"),
+        default="runtime-corrected",
+        help="Le flux /stream est déjà corrigé par camera_rotation",
+    )
     return parser.parse_args()
 
 
@@ -59,6 +65,7 @@ def main() -> int:
                 countdown_s=args.countdown,
                 severity=args.severity,
                 notes=args.notes,
+                source_orientation=args.source_orientation,
             )
         )
     except (OSError, RuntimeError, ValueError) as exc:

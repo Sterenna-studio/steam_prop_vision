@@ -40,7 +40,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--top-k", type=int, choices=(1, 2), default=2)
     parser.add_argument("--top2-margin", type=float, default=0.10)
     parser.add_argument("--roi-mode", choices=("l1", "full", "hybrid"), default="l1")
-    parser.add_argument("--camera-rotation", type=int, choices=(0, 90, 180, 270))
+    parser.add_argument(
+        "--camera-rotation",
+        type=int,
+        choices=(0, 90, 180, 270),
+        default=0,
+        help="Rotation à appliquer au corpus brut ; 0 rejoue les fichiers tels quels",
+    )
     parser.add_argument("--config", default="config/features.yaml")
     parser.add_argument("--appearance-threshold", type=float, default=0.55)
     parser.add_argument("--hardware")
@@ -58,11 +64,7 @@ def main(argv: list[str] | None = None) -> int:
     homographies = _homographies(args.homography)
     config = _load_mapping(args.config)
     thresholds = RecognitionThresholds.from_config(config, legacy_default=0.20)
-    camera_rotation = (
-        args.camera_rotation
-        if args.camera_rotation is not None
-        else int(config.get("camera_rotation", 0))
-    )
+    camera_rotation = args.camera_rotation
     failure_dir = str(Path(args.output) / "failures") if args.save_failures else None
     options = BenchmarkOptions(
         corpus=args.corpus,
