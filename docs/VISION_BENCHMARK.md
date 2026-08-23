@@ -109,6 +109,31 @@ latences, le CPU, les FPS et le temps mural. Ces agrégats réduisent les biais
 de cache, température et ordre ; ils ne remplacent pas plusieurs sessions
 terrain indépendantes.
 
+Une ligne de progression est émise avant et après chaque configuration. Un
+checkpoint JSON atomique est écrit après chaque résultat complet. Son chemin
+est affiché au lancement et à la fin. Pour imposer un nom stable puis reprendre
+une campagne interrompue :
+
+```bash
+python tools/vision_benchmark_repeated.py \
+  --corpus .runtime/benchmark-corpus \
+  --variant A,B --homography all --runs 5 \
+  --checkpoint .runtime/checkpoints/ab-ransac-magsac.json \
+  --report --output .runtime/benchmark-repeated
+
+# Après interruption : reprendre uniquement les configurations manquantes
+python tools/vision_benchmark_repeated.py \
+  --corpus .runtime/benchmark-corpus \
+  --variant A,B --homography all --runs 5 \
+  --checkpoint .runtime/checkpoints/ab-ransac-magsac.json \
+  --resume --report --output .runtime/benchmark-repeated
+```
+
+La reprise est refusée si la configuration demandée diffère du checkpoint
+(corpus, variantes, estimateurs, nombre de passes, seed, ROI, top-K ou
+orientation). Une écriture interrompue ne remplace jamais le dernier JSON
+valide.
+
 ## Corpus et ground truth
 
 Le format officiel est décrit dans

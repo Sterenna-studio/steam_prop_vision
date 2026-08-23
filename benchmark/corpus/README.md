@@ -101,3 +101,31 @@ runtime. L'outil l'annote donc `camera.orientation: runtime-corrected`. Le
 benchmark rejoue par défaut les fichiers tels qu'ils sont stockés, sans relire
 la rotation de `features.yaml`. Utiliser `--camera-rotation` uniquement pour un
 corpus réellement capturé dans l'orientation brute du capteur.
+
+## Session guidée de hard negatives
+
+L'assistant dédié enchaîne dix scènes négatives difficiles avec confirmation
+avant chaque capture. Le service production doit rester actif, car l'outil lit
+son flux `/stream` :
+
+```bash
+python tools/capture_hard_negatives.py --list
+
+python tools/capture_hard_negatives.py \
+  --scenarios all \
+  --repetitions 3 \
+  --duration 10 \
+  --fps 2
+```
+
+Touches à chaque étape : Entrée pour capturer, `s` pour passer un objet
+indisponible, `q` pour terminer proprement. Trois répétitions complètes donnent
+jusqu'à 30 séquences et 600 frames, sans sélectionner les seules prises
+faciles.
+
+Règle de ground truth : aucune plaque connue de `PLATEST` ne doit apparaître
+dans une capture négative. Une plaque cible partiellement visible reste un
+échantillon positif d'occlusion, pas un hard negative. Utiliser des objets non
+cibles réels : main seule, téléphone, livre, carte imprimée inconnue, tissu,
+quadrilatère parasite, objet réfléchissant, écran illustré et plusieurs objets
+concurrents.
