@@ -59,6 +59,7 @@ from monitor.rule_api import start_in_thread as start_rule_api
 from apps.rpi.actions import run_actions, handle_loxone_command
 from apps.rpi.admin_controls import AdminControls
 from apps.rpi.runtime_status import runtime_status
+from apps.rpi.fullframe_fallback import FullFrameFallback
 from apps.rpi.motion_gate import MotionGate
 from apps.rpi.qr_flux import QRFluxChecker
 from apps.rpi import snapshot_view
@@ -214,6 +215,9 @@ def run_card_mode(
     qr_checker = QRFluxChecker(cfg.get("mission_id", ""))
     snapshots = SnapshotWriter.from_config(cfg)
     near_miss_ratio = cfg.get("snapshot_near_miss_ratio", 0.5)
+    fullframe = FullFrameFallback.from_config(cfg)
+    if fullframe:
+        log.info("[fallback] repli plein cadre actif (L1 échoue -> L2 sur l'image)")
     motion_gate = MotionGate.from_config(cfg)
     if motion_gate:
         log.info("[gate] porte de mouvement active")
@@ -349,16 +353,38 @@ def run_card_mode(
             push_event(qr_event)
 
         quad = fast_detector.detect(frame)
-        if quad is None:
-            if snapshots:
-                snapshots.submit(frame, "none", 0.0, now, kind="L1")
-            _register_miss()
-            _push_score(now, None, 0.0)
-            continue
-
-        roi = quad.crop(frame)
+        from_fallback = False
         l2_start = time.time()
-        region = card_detector.detect(roi)
+        if quad is not None:
+            if fullframe:
+                fullframe.note_l1_hit()
+            region = card_detector.detect(quad.crop(frame))
+        else:
+            region = None
+            # Contour L1 perdu (ex : doigt sur le bord) : recherche plein
+            # cadre bornée en fréquence (voir apps/rpi/fullframe_fallback.py).
+            attempted = fullframe is not None and fullframe.should_try(
+                now,
+                motion_ok=motion_gate is None
+                or motion_gate.recently_moved(now, fullframe.motion_window_s),
+            )
+            if attempted:
+                l2_start = time.time()
+                region = card_detector.detect(frame)
+                from_fallback = region is not None
+                if from_fallback:
+                    fullframe.record_found()
+            if region is None:
+                if fullframe and not attempted and fullframe.between_attempts(now):
+                    # Frame non évaluée entre deux tentatives plein cadre : ce
+                    # n'est pas un raté, sinon miss_grace (5 frames) viderait
+                    # le hold avant la tentative suivante.
+                    continue
+                if snapshots:
+                    snapshots.submit(frame, "none", 0.0, now, kind="L1")
+                _register_miss()
+                _push_score(now, None, 0.0)
+                continue
         l2_ms = (time.time() - l2_start) * 1000
         if region is None:
             if snapshots:
@@ -379,6 +405,18 @@ def run_card_mode(
             f"images={recognizer.last_images_scanned}"
         )
         _push_score(now, recognizer.last_card_id, recognizer.last_score)
+        if result is not None and from_fallback:
+            if not fullframe.accepts(result.score, card_threshold):
+                log.debug(
+                    f"[fallback] {result.label} rejeté "
+                    f"(score={result.score:.3f} < seuil+marge)"
+                )
+                result = None
+            else:
+                log.info(
+                    f"[fallback] carte trouvée plein cadre : {result.label} "
+                    f"score={result.score:.3f}"
+                )
         if result is None:
             # Quasi-rejet : score sous le seuil mais assez haut pour mériter
             # un diagnostic (occlusion partielle, reflet...).

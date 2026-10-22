@@ -70,6 +70,16 @@ motion_gate_pixel_delta: 12       # écart de gris (0-255) pour compter un pixel
 motion_gate_changed_ratio: 0.01   # fraction de la miniature qui doit changer pour parler de mouvement
 motion_gate_linger_s: 2.0         # reste ouvert N s après le dernier mouvement
 motion_gate_idle_interval_s: 1.0  # frame de contrôle sans mouvement (carte laissée en place)
+# Repli plein cadre : quand L1 ne trouve plus de contour (ex : doigt sur le bord
+# de la carte), L2/L3 cherchent la carte dans l'image entière. Borné : après N
+# frames sans contour, au plus 1 tentative / interval_s, seulement si la scène
+# a bougé récemment (jamais sur une salle figée), et le score doit dépasser le
+# seuil de score_margin. À valider sur le corpus de négatifs (issue #9).
+enable_fullframe_fallback: false
+fullframe_min_l1_misses: 3
+fullframe_interval_s: 0.7
+fullframe_score_margin: 0.05
+fullframe_motion_window_s: 5.0
 enable_watchdog: true      # arrêt forcé si la boucle principale se fige (systemd relance)
 watchdog_timeout_s: 20.0    # secondes sans activité avant arrêt forcé
 

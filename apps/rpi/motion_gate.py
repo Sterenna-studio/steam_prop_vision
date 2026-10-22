@@ -87,6 +87,10 @@ class MotionGate:
             self.skipped += 1
         return go
 
+    def recently_moved(self, now: float, window_s: float) -> bool:
+        """Y a-t-il eu du mouvement dans les `window_s` dernières secondes ?"""
+        return now - self._last_motion <= window_s
+
     @property
     def skip_ratio(self) -> float:
         total = self.passed + self.skipped
