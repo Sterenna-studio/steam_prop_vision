@@ -209,6 +209,7 @@ def run_card_mode(
         min_matches=card_min_match,
         threshold=card_threshold,
         registry=template_registry,
+        score_mode=(cfg.get("recognition", {}) or {}).get("score_mode", "global"),
     )
     qr_checker = QRFluxChecker(cfg.get("mission_id", ""))
     snapshots = SnapshotWriter.from_config(cfg)

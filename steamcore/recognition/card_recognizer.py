@@ -17,6 +17,7 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
+from .scoring import SCORE_MODES, score_matches, zone_layout
 from .template_registry import TemplateRegistry
 from .thresholds import RecognitionThresholds
 
@@ -55,7 +56,11 @@ class CardRecognizer:
         threshold: float = 0.03,
         thresholds: RecognitionThresholds | None = None,
         registry: TemplateRegistry | None = None,
+        score_mode: str = "global",
     ):
+        if score_mode not in SCORE_MODES:
+            raise ValueError(f"score_mode inconnu : {score_mode!r} ({SCORE_MODES})")
+        self.score_mode = score_mode
         self.platest_dir = platest_dir
         self.min_matches = min_matches
         self.thresholds = thresholds or RecognitionThresholds(
@@ -86,6 +91,10 @@ class CardRecognizer:
         self.min_matches = det.get("min_matches", self.min_matches)
         legacy_default = det.get("threshold", self.threshold)
         self.thresholds = RecognitionThresholds.from_config(cfg, legacy_default)
+        mode = (cfg.get("recognition", {}) or {}).get("score_mode", self.score_mode)
+        if mode not in SCORE_MODES:
+            raise ValueError(f"score_mode inconnu : {mode!r} ({SCORE_MODES})")
+        self.score_mode = mode
         self.reload()
 
     def recognize(self, warped: np.ndarray, hint_id: str | None = None):
@@ -151,7 +160,18 @@ class CardRecognizer:
                             match, neighbor = pair
                             if match.distance < self.RATIO_TEST * neighbor.distance:
                                 good.append(match)
-                    score = len(good) / max(len(kps_r), len(kps_q), 1)
+                    zone_ids, zone_counts = tmpl.zones[img_name]
+                    good_zones = np.bincount(
+                        zone_ids[[m.trainIdx for m in good]], minlength=len(zone_counts)
+                    )
+                    score = score_matches(
+                        self.score_mode,
+                        len(good),
+                        len(kps_r),
+                        len(kps_q),
+                        good_zones,
+                        zone_counts,
+                    )
                     if score > best_score:
                         best_score = score
                         best_matches = len(good)
@@ -203,6 +223,10 @@ class CardRecognizer:
         for card_id, entries in by_card.items():
             tmpl = _OrbTemplate(card_id)
             tmpl.images = [(name, kps, desc) for (name, kps, desc, _h, _w) in entries]
+            tmpl.zones = {
+                name: zone_layout(np.array([k.pt for k in kps]), self.WARP_SIZE)
+                for (name, kps, _d, _h, _w) in entries
+            }
             self._templates.append(tmpl)
             print(f"[recognizer] {card_id} ({len(tmpl.images)} imgs)")
         print(f"[recognizer] {len(self._templates)} cartes chargees")
@@ -218,3 +242,4 @@ class _OrbTemplate:
     def __init__(self, card_id: str):
         self.card_id = card_id
         self.images: list = []  # [(nom_fichier, kps, desc), ...]
+        self.zones: dict = {}  # nom_fichier -> (zone de chaque kp, kps par zone)

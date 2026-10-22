@@ -49,6 +49,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--config", default="config/features.yaml")
     parser.add_argument("--appearance-threshold", type=float, default=0.55)
+    parser.add_argument(
+        "--score-mode",
+        choices=("global", "template", "zones"),
+        default="global",
+        help="score L3 ORB : global (production), template ou zones (tolérants à "
+        "l'occlusion ; échelles différentes, recalibrer le seuil)",
+    )
+    parser.add_argument(
+        "--orb-threshold",
+        type=float,
+        help="remplace le seuil ORB par défaut de la config (utile hors mode global)",
+    )
     parser.add_argument("--hardware")
     parser.add_argument("--camera-parameters")
     parser.add_argument("--report", action="store_true")
@@ -64,6 +76,8 @@ def main(argv: list[str] | None = None) -> int:
     homographies = _homographies(args.homography)
     config = _load_mapping(args.config)
     thresholds = RecognitionThresholds.from_config(config, legacy_default=0.20)
+    if args.orb_threshold is not None:
+        thresholds.default_threshold = args.orb_threshold
     camera_rotation = args.camera_rotation
     failure_dir = str(Path(args.output) / "failures") if args.save_failures else None
     options = BenchmarkOptions(
@@ -81,6 +95,7 @@ def main(argv: list[str] | None = None) -> int:
         l3_min_matches=int(config.get("card_min_matches", 12)),
         fast_min_area=int(config.get("card_min_area", 4000)),
         camera_rotation=camera_rotation,
+        score_mode=args.score_mode,
     )
     runner = VisionBenchmarkRunner(variants, homographies, options, thresholds)
     metrics = runner.run()
@@ -93,6 +108,7 @@ def main(argv: list[str] | None = None) -> int:
             top_k=args.top_k,
             top2_margin=args.top2_margin,
             camera_rotation=camera_rotation,
+            score_mode=args.score_mode,
             hardware=args.hardware,
             camera_parameters=_load_mapping(args.camera_parameters)
             if args.camera_parameters

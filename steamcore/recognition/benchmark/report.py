@@ -25,6 +25,7 @@ class ReportContext:
     camera_rotation: int = 0
     hardware: str | None = None
     camera_parameters: dict | None = None
+    score_mode: str = "global"
 
 
 def build_report(metrics: VisionMetricsAccumulator, context: ReportContext) -> dict:
@@ -77,6 +78,7 @@ def render_markdown(report: dict) -> str:
         f"- Corpus : `{configuration['corpus']}`",
         f"- Templates runtime : `{configuration['templates']}`",
         f"- ROI : `{configuration['roi_mode']}`",
+        f"- Score L3 : `{configuration.get('score_mode', 'global')}`",
         "",
         "> Critère produit : un setup S.T.E.A.M Vision n'est pas considéré fiable",
         "> si son recall sur le corpus de référence est inférieur à 98 %. La",

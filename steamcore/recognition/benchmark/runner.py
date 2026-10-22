@@ -35,6 +35,7 @@ class BenchmarkOptions:
     l3_min_matches: int = 12
     fast_min_area: int = 4000
     camera_rotation: int = 0
+    score_mode: str = "global"
 
 
 class VisionBenchmarkRunner:
@@ -131,6 +132,7 @@ class VisionBenchmarkRunner:
                 platest_dir=self.options.templates,
                 min_matches=self.options.l3_min_matches,
                 thresholds=self.thresholds,
+                score_mode=self.options.score_mode,
             )
         appearance_thresholds = RecognitionThresholds(
             default_threshold=self.options.appearance_threshold,

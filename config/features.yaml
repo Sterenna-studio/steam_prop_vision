@@ -34,6 +34,12 @@ card_miss_grace_frames: 5   # frames ratées d'affilée tolérées PENDANT le ho
 recognition:
   default_threshold: 0.20
   use_per_object_thresholds: false
+  # Score L3 : "global" (production : bons_matchs / max(points template, requête)),
+  # "template" (/ points template seuls : insensible à un doigt ou au décor autour)
+  # ou "zones" (carte en 2x2, moyenne des 3 meilleures zones : tolère une zone
+  # masquée). Les échelles diffèrent : tout autre mode que "global" exige de
+  # recalibrer default_threshold / seuils par objet au benchmark (--score-mode).
+  score_mode: "global"
 
 # Seuils optionnels par objet, sans activation automatique.
 objects: {}
