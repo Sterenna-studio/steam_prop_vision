@@ -78,3 +78,28 @@ def test_submit_copies_frame(tmp_path):
     f[:] = 255
     queued = w._queue.get_nowait()[0]
     assert queued.max() == 0
+
+
+def test_l1_disabled_by_default_and_samples_when_enabled(tmp_path):
+    w = SnapshotWriter(str(tmp_path), queue_size=5)
+    assert not w.submit(FRAME, "none", 0.0, now=1.0, kind="L1")
+    w = SnapshotWriter(str(tmp_path), queue_size=5, l1_interval_s=30)
+    assert w.submit(FRAME, "none", 0.0, now=1.0, kind="L1")
+    assert not w.submit(FRAME, "none", 0.0, now=10.0, kind="L1")
+    assert w.submit(FRAME, "none", 0.0, now=40.0, kind="L1")
+
+
+def test_kinds_have_independent_rate_limits(tmp_path):
+    w = SnapshotWriter(str(tmp_path), min_interval_s=5, queue_size=5)
+    assert w.submit(FRAME, "a", 0.5, now=1.0, kind="ok")
+    assert w.submit(FRAME, "a", 0.1, now=1.5, kind="L3")
+    assert not w.submit(FRAME, "a", 0.1, now=2.0, kind="L3")
+
+
+def test_reject_burst_never_evicts_validated(tmp_path):
+    w = SnapshotWriter(str(tmp_path), max_files=2, reject_max_files=2)
+    w._write(FRAME, "v", 0.9, 1_700_000_000, kind="ok")
+    for i in range(5):
+        w._write(FRAME, "v", 0.1, 1_700_000_010 + i, kind="L3")
+    assert len(list(tmp_path.glob("*_ok_*.jpg"))) == 1
+    assert len(list(tmp_path.glob("*_L3_*.jpg"))) == 2

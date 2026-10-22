@@ -34,6 +34,11 @@ _SAFE = re.compile(r"[^A-Za-z0-9_-]+")
 
 
 class SnapshotWriter(threading.Thread):
+    """kind : "ok" = carte validée ; "L1"/"L2"/"L3" = rejet à cet étage du
+    pipeline (L1 aucun contour, L2 contour sans carte, L3 score sous le seuil).
+    Chaque kind a son propre débit et sa propre rotation : une rafale de rejets
+    ne chasse jamais les snapshots de cartes validées."""
+
     def __init__(
         self,
         directory: str = DEFAULT_DIR,
@@ -41,15 +46,27 @@ class SnapshotWriter(threading.Thread):
         min_interval_s: float = 5.0,
         jpeg_quality: int = 80,
         queue_size: int = 1,
+        reject_max_files: int = 30,
+        reject_interval_s: float = 10.0,
+        l1_interval_s: float = 0.0,
     ):
         super().__init__(daemon=True, name="snapshots")
         self.directory = Path(directory)
         self.max_files = max(1, int(max_files))
+        self.reject_max_files = max(1, int(reject_max_files))
         self.min_interval_s = float(min_interval_s)
         self.jpeg_quality = int(jpeg_quality)
+        # None = kind désactivé. L1 est le cas "scène vide" le plus fréquent :
+        # échantillonnage lent, éteint par défaut.
+        self._intervals = {
+            "ok": self.min_interval_s,
+            "L2": float(reject_interval_s),
+            "L3": float(reject_interval_s),
+            "L1": float(l1_interval_s) if l1_interval_s > 0 else None,
+        }
         self._queue: queue.Queue = queue.Queue(maxsize=max(1, queue_size))
         self._stop_event = threading.Event()
-        self._last_submit = float("-inf")
+        self._last_submit: dict[str, float] = {}
         self.written = 0
         self.dropped = 0
 
@@ -63,21 +80,32 @@ class SnapshotWriter(threading.Thread):
             max_files=cfg.get("snapshot_max_files", 50),
             min_interval_s=cfg.get("snapshot_min_interval_s", 5.0),
             jpeg_quality=cfg.get("snapshot_jpeg_quality", 80),
+            reject_max_files=cfg.get("snapshot_reject_max_files", 30),
+            reject_interval_s=cfg.get("snapshot_reject_interval_s", 10.0),
+            l1_interval_s=cfg.get("snapshot_l1_interval_s", 0.0),
         )
 
     def submit(
-        self, frame, card_id: str, score: float, now: float | None = None
+        self,
+        frame,
+        card_id: str,
+        score: float,
+        now: float | None = None,
+        kind: str = "ok",
     ) -> bool:
         """Non bloquant. True si la frame a été mise en file."""
+        interval = self._intervals.get(kind)
+        if interval is None:
+            return False
         now = time.time() if now is None else now
-        if now - self._last_submit < self.min_interval_s:
+        if now - self._last_submit.get(kind, float("-inf")) < interval:
             return False
         try:
-            self._queue.put_nowait((frame.copy(), card_id, score, now))
+            self._queue.put_nowait((frame.copy(), card_id, score, now, kind))
         except queue.Full:
             self.dropped += 1
             return False
-        self._last_submit = now
+        self._last_submit[kind] = now
         return True
 
     def run(self) -> None:
@@ -94,11 +122,13 @@ class SnapshotWriter(threading.Thread):
     def stop(self) -> None:
         self._stop_event.set()
 
-    def _write(self, frame, card_id: str, score: float, ts: float) -> Path:
+    def _write(
+        self, frame, card_id: str, score: float, ts: float, kind: str = "ok"
+    ) -> Path:
         self.directory.mkdir(parents=True, exist_ok=True)
         stamp = time.strftime("%Y%m%d_%H%M%S", time.localtime(ts))
         millis = int((ts % 1) * 1000)
-        name = f"{stamp}_{millis:03d}_{_SAFE.sub('_', card_id)}_{score:.2f}.jpg"
+        name = f"{stamp}_{millis:03d}_{kind}_{_SAFE.sub('_', card_id)}_{score:.2f}.jpg"
         final = self.directory / name
         tmp = final.with_suffix(".tmp")
         ok, buf = cv2.imencode(
@@ -109,13 +139,14 @@ class SnapshotWriter(threading.Thread):
         tmp.write_bytes(buf.tobytes())
         os.replace(tmp, final)
         self.written += 1
-        self._rotate()
+        self._rotate(kind)
         log.info(f"[snapshot] {final}")
         return final
 
-    def _rotate(self) -> None:
-        files = sorted(self.directory.glob("*.jpg"))
-        for old in files[: max(0, len(files) - self.max_files)]:
+    def _rotate(self, kind: str = "ok") -> None:
+        limit = self.max_files if kind == "ok" else self.reject_max_files
+        files = sorted(self.directory.glob(f"*_{kind}_*.jpg"))
+        for old in files[: max(0, len(files) - limit)]:
             try:
                 old.unlink()
             except OSError:
