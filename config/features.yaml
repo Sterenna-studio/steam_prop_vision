@@ -60,6 +60,7 @@ snapshot_jpeg_quality: 80
 # L3 score entre near_miss_ratio×seuil et le seuil. Rotation séparée des cartes validées.
 snapshot_reject_max_files: 30
 snapshot_reject_interval_s: 10.0   # débit min. des rejets L2/L3
+snapshot_l2: false                 # true : capture aussi les rejets L2 (contour sans carte) — bruyant : tout contour d'écran/affiche en produit un
 snapshot_near_miss_ratio: 0.5      # L3 capturé si score >= ratio × card_score_threshold
 snapshot_l1_interval_s: 0.0        # >0 : échantillonne aussi L1 (scène vide incluse) toutes les N s
 # Porte de mouvement : n'exécute pas QR/L1/L2/L3 quand la scène est figée et

@@ -215,6 +215,7 @@ def run_card_mode(
     qr_checker = QRFluxChecker(cfg.get("mission_id", ""))
     snapshots = SnapshotWriter.from_config(cfg)
     near_miss_ratio = cfg.get("snapshot_near_miss_ratio", 0.5)
+    snapshot_l2 = cfg.get("snapshot_l2", False)
     fullframe = FullFrameFallback.from_config(cfg)
     if fullframe:
         log.info("[fallback] repli plein cadre actif (L1 échoue -> L2 sur l'image)")
@@ -387,7 +388,7 @@ def run_card_mode(
                 continue
         l2_ms = (time.time() - l2_start) * 1000
         if region is None:
-            if snapshots:
+            if snapshots and snapshot_l2:
                 snapshots.submit(frame, "none", 0.0, now, kind="L2")
             _register_miss()
             _push_score(now, None, 0.0)
