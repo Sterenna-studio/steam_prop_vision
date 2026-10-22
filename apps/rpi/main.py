@@ -60,6 +60,7 @@ from apps.rpi.actions import run_actions, handle_loxone_command
 from apps.rpi.admin_controls import AdminControls
 from apps.rpi.runtime_status import runtime_status
 from apps.rpi.qr_flux import QRFluxChecker
+from apps.rpi import snapshot_view
 from apps.rpi.snapshots import SnapshotWriter
 from apps.rpi.watchdog import Watchdog
 from apps.rpi.boot import boot_checks
@@ -212,6 +213,7 @@ def run_card_mode(
     near_miss_ratio = cfg.get("snapshot_near_miss_ratio", 0.5)
     if snapshots:
         snapshots.start()
+        snapshot_view.set_directory(snapshots.directory)
         log.info(f"[snapshot] actif -> {snapshots.directory}")
     runtime_status.set_detectors(True, recognizer.card_ids)
     runtime_status.set_pipeline(True)

@@ -15,6 +15,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import cv2
 
+from apps.rpi import snapshot_view
 from monitor.ws_bridge import push_event as _push_event_raw
 
 log = logging.getLogger("steam")
@@ -95,7 +96,15 @@ def start_mjpeg_server(port: int = 5050) -> None:
             pass  # silence logs HTTP
 
         def do_GET(self):
-            if self.path in ("/", "/view"):
+            snap = snapshot_view.handle(self.path)
+            if snap is not None:
+                status, ctype, body = snap
+                self.send_response(status)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            elif self.path in ("/", "/view"):
                 body = _VIEW_HTML
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
