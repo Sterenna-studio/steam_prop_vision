@@ -6,6 +6,64 @@
 
 ---
 
+## Mise à jour — octobre 2026 (état vérifié dans le code)
+
+Cet audit de mai 2026 a été relu contre le code actuel. Les sections suivantes
+restent l'historique d'origine ; cette section fait foi en cas de désaccord.
+Suivi des améliorations de performance et de fiabilité : issue #10.
+
+### Corrigé depuis l'audit
+- `main.py` : try/except global avec log (`CRASH NON GÉRÉ`), logs rotatifs,
+  watchdog anti-freeze (`apps/rpi/watchdog.py`), service systemd
+  (`deploy/steam-vision.service`).
+- Repo : `yolov8n.pt` (désormais ignoré via `*.pt`), `WantedRH.jpg`, `refacto/`,
+  `configtest/`, `app_flask.py` et `plate_bench_gui.py` ont disparu ; plate
+  `bois` versionnée ; tag `v2.1.0` ; `.gitattributes` présent.
+- `rules.yaml` : validation de schéma (`validate_rules_schema`).
+- Tests : couverture bien au-delà de `card_recognizer`/`rules` (160+ tests,
+  CI ruff + pytest).
+- L2 tourne en **ORB par défaut** ; SIFT/AKAZE mesurés trop lents (jusqu'à
+  2,4 s/frame) sans gain de recall : écartés (`docs/VISION_BENCHMARK.md`).
+
+### Erreur de l'audit initial
+- « Matching sur 4 quadrants : bonne stratégie anti-occlusion » : **faux**.
+  `card_recognizer.py` faisait un matching global avec
+  `score = bons_matchs / max(points_template, points_requête)` : les points
+  parasites d'un doigt gonflent le dénominateur et font tomber le score (cas
+  terrain : un petit morceau de doigt sur l'illustration empêchait la
+  détection). Modes `template` et `zones` ajoutés (`scoring.py`, défaut
+  `global`, à valider au benchmark avant activation).
+
+### Constats vérifiés (mesures STYX, `docs/VISION_BENCHMARK.md`)
+- ~124 ms p50 par frame en ORB/ORB (≈ 8 fps) ; MAGSAC plus stable que RANSAC.
+- L1 hit : 78 % en frontal, **10 % avec un doigt sur le bord** (le contour
+  est le maillon faible, pas L3). Repli plein cadre : 86,7 % de triggers
+  corrects contre 33,3 % pour le contour seul — un seul opérateur, une seule
+  distance, 20 frames négatives : indicatif, pas une validation.
+
+### Livré pour l'issue #10 (tout désactivé par défaut, production inchangée)
+- Porte de mouvement (`apps/rpi/motion_gate.py`) : pas de QR/L1/L2/L3 sur une
+  scène figée.
+- Score L3 tolérant à l'occlusion (`steamcore/recognition/scoring.py`),
+  sélectionnable via `recognition.score_mode` et `--score-mode` au benchmark.
+- Repli plein cadre borné (`apps/rpi/fullframe_fallback.py`).
+- Snapshots de diagnostic par type (validée, L1/L2/L3) et page `/snapshots`.
+
+### Reste ouvert
+- 🔴 Mesurer sur STYX (latence, CPU à vide, recall avec doigt, faux positifs)
+  avant d'activer quoi que ce soit ; corpus de négatifs difficiles (#9).
+- 🟡 `video_player.py` : pas de timeout sur le socket IPC mpv, pas de
+  vérification de la présence de `mpv` au démarrage (le nettoyage des mpv
+  orphelins existe dans `boot.py`, pas le contrôle d'installation).
+- 🟡 `udp.py` : pas de retry sur échec d'envoi (le port d'écoute est déjà
+  configurable via `udp_listen_port`, contrairement à ce que disait l'audit).
+- 🟡 `apps/rpi/main_gui.py` duplique `run_actions()` (voir AGENTS.md).
+- 🟡 `tools/feature_gui.py` édite des clés obsolètes.
+- 🟡 `requirements_rpi.lock.txt` à générer après validation (#7) ; vidéos
+  placeholder à remplacer (droit d'auteur) ; historique git alourdi.
+
+---
+
 ## 1. Vue d'ensemble
 
 | Critère | État | Note |
