@@ -45,7 +45,12 @@ enable_rule_api: true       # Rule editor HTTP   http://0.0.0.0:8890
 enable_audio: true          # lecture audio sur détection
 enable_video: true          # lecture vidéo sur détection
 enable_stream: true         # serveur MJPEG + page /view  http://0.0.0.0:5050
-enable_watchdog: true       # arrêt forcé si la boucle principale se fige (systemd relance)
+enable_snapshots: false     # JPEG de la frame à chaque carte validée (diagnostic) — voir snapshot_*
+snapshot_dir: "/dev/shm/steam_snapshots"  # RAM par défaut = zéro usure SD (perdu au reboot) ; clé USB pour conserver
+snapshot_max_files: 50      # rotation : on garde les N plus récents
+snapshot_min_interval_s: 5.0  # espacement minimal entre deux snapshots
+snapshot_jpeg_quality: 80
+enable_watchdog: true      # arrêt forcé si la boucle principale se fige (systemd relance)
 watchdog_timeout_s: 20.0    # secondes sans activité avant arrêt forcé
 
 # ── Validation GM (mode carte uniquement) ──────────────────────────

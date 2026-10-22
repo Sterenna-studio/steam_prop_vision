@@ -60,6 +60,7 @@ from apps.rpi.actions import run_actions, handle_loxone_command
 from apps.rpi.admin_controls import AdminControls
 from apps.rpi.runtime_status import runtime_status
 from apps.rpi.qr_flux import QRFluxChecker
+from apps.rpi.snapshots import SnapshotWriter
 from apps.rpi.watchdog import Watchdog
 from apps.rpi.boot import boot_checks
 from apps.rpi.view import (
@@ -207,6 +208,10 @@ def run_card_mode(
         registry=template_registry,
     )
     qr_checker = QRFluxChecker(cfg.get("mission_id", ""))
+    snapshots = SnapshotWriter.from_config(cfg)
+    if snapshots:
+        snapshots.start()
+        log.info(f"[snapshot] actif -> {snapshots.directory}")
     runtime_status.set_detectors(True, recognizer.card_ids)
     runtime_status.set_pipeline(True)
 
@@ -405,6 +410,8 @@ def run_card_mode(
             + str(int(held_ms))
             + "ms"
         )
+        if snapshots:
+            snapshots.submit(frame, result.card_id, result.score, now)
         push_event({"type": "state", "state": "STANDBY"})
         run_actions(cfg, rule_engine, result, audio, video, image)
         state = State.STANDBY
@@ -412,6 +419,8 @@ def run_card_mode(
         _reset_detection()
         log.info("[state] -> STANDBY (" + str(idle_after_s) + "s)")
 
+    if snapshots:
+        snapshots.stop()
     log.info("[stop] " + str(frame_count) + " frames traitees.")
     runtime_status.set_pipeline(False)
 
