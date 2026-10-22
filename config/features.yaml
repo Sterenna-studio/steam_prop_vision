@@ -56,6 +56,14 @@ snapshot_reject_max_files: 30
 snapshot_reject_interval_s: 10.0   # débit min. des rejets L2/L3
 snapshot_near_miss_ratio: 0.5      # L3 capturé si score >= ratio × card_score_threshold
 snapshot_l1_interval_s: 0.0        # >0 : échantillonne aussi L1 (scène vide incluse) toutes les N s
+# Porte de mouvement : n'exécute pas QR/L1/L2/L3 quand la scène est figée et
+# qu'aucun candidat n'est en cours de validation (économie de CPU à vide).
+# Une frame de contrôle passe toutes les idle_interval_s même sans mouvement.
+enable_motion_gate: false
+motion_gate_pixel_delta: 12       # écart de gris (0-255) pour compter un pixel comme changé
+motion_gate_changed_ratio: 0.01   # fraction de la miniature qui doit changer pour parler de mouvement
+motion_gate_linger_s: 2.0         # reste ouvert N s après le dernier mouvement
+motion_gate_idle_interval_s: 1.0  # frame de contrôle sans mouvement (carte laissée en place)
 enable_watchdog: true      # arrêt forcé si la boucle principale se fige (systemd relance)
 watchdog_timeout_s: 20.0    # secondes sans activité avant arrêt forcé
 

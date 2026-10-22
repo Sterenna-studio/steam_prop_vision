@@ -59,6 +59,7 @@ from monitor.rule_api import start_in_thread as start_rule_api
 from apps.rpi.actions import run_actions, handle_loxone_command
 from apps.rpi.admin_controls import AdminControls
 from apps.rpi.runtime_status import runtime_status
+from apps.rpi.motion_gate import MotionGate
 from apps.rpi.qr_flux import QRFluxChecker
 from apps.rpi import snapshot_view
 from apps.rpi.snapshots import SnapshotWriter
@@ -82,6 +83,7 @@ READY_CHECK_CARD_ID = "plate_ready_check"
 # ── Monitoring /view (FPS + score continu) ──────────────────────────
 FPS_PUSH_INTERVAL = 1.0  # s entre deux mises à jour du compteur FPS
 SCORE_PUSH_INTERVAL = 0.3  # s entre deux mises à jour du score ORB en direct
+GATE_LOG_INTERVAL = 60.0  # s entre deux bilans de la porte de mouvement
 
 # ── Orientation caméra ───────────────────────────────────────────────
 # camera_rotation dans features.yaml (0/90/180/270) corrige le montage
@@ -211,6 +213,9 @@ def run_card_mode(
     qr_checker = QRFluxChecker(cfg.get("mission_id", ""))
     snapshots = SnapshotWriter.from_config(cfg)
     near_miss_ratio = cfg.get("snapshot_near_miss_ratio", 0.5)
+    motion_gate = MotionGate.from_config(cfg)
+    if motion_gate:
+        log.info("[gate] porte de mouvement active")
     if snapshots:
         snapshots.start()
         snapshot_view.set_directory(snapshots.directory)
@@ -226,6 +231,7 @@ def run_card_mode(
     fps_count = 0
     fps_last_push = time.time()
     last_score_push = 0.0
+    last_gate_log = 0.0
 
     log.info(
         "[card] Pipeline card — IDLE (hold="
@@ -294,6 +300,13 @@ def run_card_mode(
             push_event({"type": "fps", "value": round(fps, 1)})
             fps_count = 0
             fps_last_push = now
+            if motion_gate and now - last_gate_log >= GATE_LOG_INTERVAL:
+                last_gate_log = now
+                log.info(
+                    f"[gate] {motion_gate.skipped} frames ignorées / "
+                    f"{motion_gate.passed} traitées "
+                    f"({motion_gate.skip_ratio:.0%} d'économie)"
+                )
 
         if template_reload.is_set():
             template_reload.clear()
@@ -321,6 +334,13 @@ def run_card_mode(
                 _reset_detection()
                 log.info("[state] -> IDLE")
                 push_event({"type": "state", "state": "IDLE"})
+            continue
+
+        # Scène figée et aucun candidat en cours de validation : on n'exécute
+        # ni QR ni L1/L2/L3 (voir apps/rpi/motion_gate.py).
+        if motion_gate and not motion_gate.should_process(
+            frame, now, force=temporal.consecutive_card_id is not None
+        ):
             continue
 
         qr_event = qr_checker.check(frame, frame_count, now)
