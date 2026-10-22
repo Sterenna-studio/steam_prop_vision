@@ -209,6 +209,7 @@ def run_card_mode(
     )
     qr_checker = QRFluxChecker(cfg.get("mission_id", ""))
     snapshots = SnapshotWriter.from_config(cfg)
+    near_miss_ratio = cfg.get("snapshot_near_miss_ratio", 0.5)
     if snapshots:
         snapshots.start()
         log.info(f"[snapshot] actif -> {snapshots.directory}")
@@ -326,6 +327,8 @@ def run_card_mode(
 
         quad = fast_detector.detect(frame)
         if quad is None:
+            if snapshots:
+                snapshots.submit(frame, "none", 0.0, now, kind="L1")
             _register_miss()
             _push_score(now, None, 0.0)
             continue
@@ -335,6 +338,8 @@ def run_card_mode(
         region = card_detector.detect(roi)
         l2_ms = (time.time() - l2_start) * 1000
         if region is None:
+            if snapshots:
+                snapshots.submit(frame, "none", 0.0, now, kind="L2")
             _register_miss()
             _push_score(now, None, 0.0)
             continue
@@ -352,6 +357,16 @@ def run_card_mode(
         )
         _push_score(now, recognizer.last_card_id, recognizer.last_score)
         if result is None:
+            # Quasi-rejet : score sous le seuil mais assez haut pour mériter
+            # un diagnostic (occlusion partielle, reflet...).
+            if snapshots and recognizer.last_score >= card_threshold * near_miss_ratio:
+                snapshots.submit(
+                    frame,
+                    recognizer.last_card_id or "none",
+                    recognizer.last_score,
+                    now,
+                    kind="L3",
+                )
             _register_miss()
             continue
 
